@@ -1,24 +1,24 @@
-# OWASP Top 10 — FastAPI Edition
+# OWASP Top 10 2025 — FastAPI Edition
 
-The OWASP Top 10 is the industry-standard list of the most critical web application security risks. Every SaaS backend will be attacked. Building defenses in from day one costs nothing; fixing a breach costs everything.
+The OWASP Top 10 is the industry-standard list of the most critical web application security risks. This guide uses the **2025 edition** — the ordering and categories changed significantly from 2021. Every SaaS backend will be attacked. Building defenses in from day one costs nothing; fixing a breach costs everything.
 
-This guide maps each risk to a concrete FastAPI/Python pattern — both the vulnerable code and the fix.
+Each entry maps the vulnerability to a concrete FastAPI/Python pattern with the vulnerable code and the fix.
 
 ---
 
-## A01 — Broken Access Control
+## A01:2025 — Broken Access Control
 
-Users performing actions or reading data they are not allowed to.
+Users performing actions or reading data they are not permitted to.
 
 **Vulnerable:**
 ```python
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDto)
 async def get_invoice(invoice_id: int, session: Annotated[AsyncSession, Depends(get_session)]) -> InvoiceDto:
     invoice = await InvoiceRepository(session).get_by_id(invoice_id)
-    return InvoiceDto.model_validate(invoice)   # ← any authenticated user can read any invoice
+    return InvoiceDto.model_validate(invoice)   # any authenticated user reads any invoice
 ```
 
-**Fixed — scope queries to the authenticated user:**
+**Fixed — scope every query to the authenticated user:**
 ```python
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDto)
 async def get_invoice(
@@ -26,88 +26,183 @@ async def get_invoice(
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> InvoiceDto:
-    invoice = await GetInvoiceUseCase(InvoiceRepository(session)).execute(invoice_id, owner_id=current_user.id)
-    return invoice   # use case raises NotFoundError if owner_id doesn't match
+    # use case enforces ownership — raises NotFoundError for both "not found" and "not yours"
+    return await GetInvoiceUseCase(InvoiceRepository(session)).execute(invoice_id, owner_id=current_user.id)
 ```
 
-The use case enforces ownership — a `NotFoundError` is returned for both "not found" and "not yours" to prevent enumeration.
+Returning `404` instead of `403` prevents resource enumeration — attackers can't tell whether a resource exists or they're just forbidden from it.
 
 ---
 
-## A02 — Cryptographic Failures
+## A02:2025 — Security Misconfiguration
+
+Default credentials, open CORS, verbose error messages, debug mode in production, unnecessary features enabled.
+
+**Vulnerable:**
+```python
+app = FastAPI(debug=True)                          # stack traces exposed to clients
+app.add_middleware(CORSMiddleware, allow_origins=["*"])  # any domain can call your API
+JWT_SECRET = "changeme"                             # default never changed
+```
+
+**Fixed — settings enforce safe defaults, fail at startup if secrets are missing:**
+```python
+class Settings(BaseSettings):
+    DEBUG: bool = False
+    CORS_ORIGINS: list[str] = []                   # empty — must be explicitly set per environment
+    JWT_SECRET: str = Field(...)                   # no default — startup crashes if unset
+    DATABASE_URL: str = Field(...)                 # same — never in source code
+
+@app.exception_handler(Exception)
+async def global_error_handler(request: Request, exc: Exception):
+    if not settings.DEBUG:
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    raise exc   # only full errors in DEBUG mode
+```
+
+---
+
+## A03:2025 — Software Supply Chain Failures *(new in 2025)*
+
+Your dependencies, build tools, and CI/CD pipeline are part of your attack surface. Supply chain attacks compromise trusted components to inject malicious code — SolarWinds, Log4Shell, the xz utils backdoor, and hundreds of typosquatted PyPI packages follow this pattern.
+
+**Attack vectors in Python projects:**
+- Typosquatting: `pip install reqeusts` (one letter off from `requests`)
+- Dependency confusion: attacker uploads a package with your internal package name to PyPI
+- Compromised maintainer account: legitimate package hijacked and poisoned
+- Unpinned dependencies: `requests>=2.0` installs whatever is latest, including a compromised version
+- Unsigned CI artifacts: build pipeline tampered, Docker image poisoned before push
+
+**Prevention — lock, verify, and audit everything:**
+```bash
+# 1. Pin exact versions with content hashes (poetry.lock contains SHA256 hashes)
+poetry install   # installs exactly what's in poetry.lock — no version resolution at deploy time
+
+# 2. Audit for known CVEs in CI
+pip install pip-audit
+pip-audit --require-hashes -r requirements.txt   # fails build on any known vulnerability
+
+# 3. Check for dependency confusion — use a private registry for internal packages
+# pyproject.toml
+[[tool.poetry.source]]
+name = "internal"
+url = "https://your-registry/simple/"
+priority = "primary"                # checked before PyPI
+```
+
+```yaml
+# .github/dependabot.yml — automated dependency updates
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+```
+
+```yaml
+# .github/workflows/ci.yml — pin action versions to a commit SHA, not a floating tag
+- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5   # v4 pinned to SHA
+# NOT: actions/checkout@v4  ← tag can be moved to point at malicious code
+```
+
+**Software Bill of Materials (SBOM):** generate a machine-readable inventory of every direct and transitive dependency so you know immediately when a CVE affects you:
+```bash
+pip install cyclonedx-bom
+cyclonedx-py poetry > sbom.json   # generate SBOM from poetry.lock
+```
+
+---
+
+## A04:2025 — Cryptographic Failures
 
 Sensitive data exposed in transit or at rest due to weak or missing encryption.
 
 **Vulnerable:**
 ```python
-user.password = plain_text_password          # stored as plain text
-DATABASE_URL = "postgresql://..."            # hardcoded in source code
-token = jwt.encode({"sub": user.id}, "")    # empty secret
+user.password = plain_text_password           # stored as plain text — catastrophic
+token = jwt.encode({"sub": user.id}, "")      # empty secret — any token is valid
+DATABASE_URL = "postgresql://user:pass@host"  # hardcoded in source — committed to git
 ```
 
 **Fixed:**
 ```python
-# Entity setter always hashes — no way to store plain text
-user.password = plain_text_password          # calls bcrypt.hashpw internally
+# Entity setter always hashes — impossible to store plain text accidentally
+@password.setter
+def password(self, plain: str) -> None:
+    self._password_hash = bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
-# Secrets come from environment only
-DATABASE_URL: str = Field(..., env="DATABASE_URL")   # pydantic-settings, no default
-JWT_SECRET: str = Field(..., env="JWT_SECRET")        # must be set — fails at startup if missing
+# Short-lived tokens with expiry
+def create_access_token(sub: str, secret: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(minutes=15)
+    return jwt.encode({"sub": sub, "exp": exp}, secret, algorithm="HS256")
 
-# Strong JWT signing
-token = jwt.encode({"sub": str(user.id), "exp": exp}, settings.JWT_SECRET, algorithm="HS256")
+# Secrets from environment only — pydantic-settings enforces presence at startup
+JWT_SECRET: str = Field(...)          # no default — process refuses to start if missing
+DATABASE_URL: str = Field(...)        # same
 ```
-
-Never commit `.env` files. Add them to `.gitignore` on day one.
 
 ---
 
-## A03 — Injection
+## A05:2025 — Injection
 
-Untrusted input executed as code — SQL, shell, LDAP, XML.
+Untrusted input executed as code — SQL, shell commands, LDAP, template strings.
 
 **Vulnerable:**
 ```python
-# Raw string interpolation in SQL — classic injection
+# Classic SQL injection via string interpolation
 query = f"SELECT * FROM users WHERE email = '{email}'"
-result = await session.execute(text(query))
+await session.execute(text(query))
+
+# Shell injection
+import subprocess
+subprocess.run(f"convert {user_filename} output.jpg", shell=True)  # attacker passes "; rm -rf /"
 ```
 
-**Fixed — SQLAlchemy parameterized queries (the only way):**
+**Fixed:**
 ```python
-# ORM query — parameters are always bound, never interpolated
+# SQLAlchemy ORM — parameters are always bound, never interpolated
 result = await session.execute(select(User).where(User.email == email))
 
-# If you must use raw SQL, use bound parameters:
-result = await session.execute(text("SELECT * FROM users WHERE email = :email"), {"email": email})
-```
+# Raw SQL only with bound parameters
+result = await session.execute(
+    text("SELECT * FROM users WHERE email = :email"),
+    {"email": email}
+)
 
-Also applies to shell commands — never `subprocess.run(f"convert {user_filename}")`. Use `shlex.split` and pass a list.
+# Shell commands — pass a list, never a string with shell=True
+subprocess.run(["convert", user_filename, "output.jpg"])   # no shell injection possible
+```
 
 ---
 
-## A04 — Insecure Design
+## A06:2025 — Insecure Design
 
-Security flaws baked into the architecture — no amount of patching fixes a fundamentally insecure design.
+Security flaws baked into the architecture — no patching fixes a fundamentally insecure design. Must be addressed at the design phase.
 
 **Examples of insecure design in SaaS:**
-- Password reset via predictable tokens (`reset?token=12345`)
-- "Security through obscurity" (hiding admin routes instead of protecting them)
-- No rate limiting on login endpoints — brute-forceable
-- Multi-tenant app with shared DB and no `tenant_id` scoping
+- Password reset via predictable tokens (`?token=12345` — sequential, guessable)
+- Multi-tenant app with no `tenant_id` scoping — all tenants see each other's data
+- No rate limiting on authentication — brute-forceable forever
+- Admin functionality on the same domain/port as user functionality — no network isolation
 
-**Fixed — design security in from the start:**
+**Fixed — design security in from day one:**
 ```python
-# Rate limiting on sensitive endpoints (slowapi)
+# Cryptographically random reset tokens
+import secrets
+token = secrets.token_urlsafe(32)   # 256 bits of entropy — not guessable
+
+# Rate limiting on sensitive endpoints
 from slowapi import Limiter
 limiter = Limiter(key_func=get_remote_address)
 
 @router.post("/auth/login")
-@limiter.limit("5/minute")          # brute force protection
+@limiter.limit("5/minute")
 async def login(request: Request, body: AuthDto, ...) -> AuthSuccessDto: ...
 
-# Multi-tenant scoping — every query includes tenant_id
-async def get_all(self, tenant_id: int) -> list[Invoice]:
+# Every query is tenant-scoped — enforced in the repository, not the route
+async def get_all_invoices(self, tenant_id: int) -> list[Invoice]:
     result = await self.session.execute(
         select(Invoice).where(Invoice.tenant_id == tenant_id)
     )
@@ -116,76 +211,25 @@ async def get_all(self, tenant_id: int) -> list[Invoice]:
 
 ---
 
-## A05 — Security Misconfiguration
+## A07:2025 — Authentication Failures
 
-Default credentials, open S3 buckets, verbose error messages, debug mode in production.
-
-**Vulnerable:**
-```python
-app = FastAPI(debug=True)                # stack traces exposed to clients
-CORS: allow_origins=["*"]               # any domain can call your API
-SECRET_KEY = "changeme"                  # default never changed
-```
-
-**Fixed:**
-```python
-# Settings enforce safe defaults
-class Settings(BaseSettings):
-    DEBUG: bool = False                  # must explicitly set DEBUG=true
-    CORS_ORIGINS: list[str] = []         # empty by default — explicitly set in prod
-    JWT_SECRET: str = Field(...)         # no default — startup fails if unset
-
-# FastAPI error handler strips stack traces in production
-@app.exception_handler(Exception)
-async def global_error_handler(request: Request, exc: Exception):
-    if not settings.DEBUG:
-        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-    raise exc
-```
-
----
-
-## A06 — Vulnerable and Outdated Components
-
-Using dependencies with known CVEs.
-
-**Prevention:**
-```bash
-# Audit dependencies for known vulnerabilities
-pip install pip-audit
-pip-audit
-
-# Pin exact versions in production
-poetry add fastapi==0.115.0   # not fastapi="*"
-
-# Enable Dependabot in .github/dependabot.yml
-updates:
-  - package-ecosystem: pip
-    directory: "/"
-    schedule:
-      interval: weekly
-```
-
-Check `poetry show --outdated` regularly. A SaaS app with a vulnerable `cryptography` or `pyjwt` dependency is compromised before you write a single line of business logic.
-
----
-
-## A07 — Identification and Authentication Failures
-
-Broken login, weak passwords, missing token expiry, no logout.
+Broken login flows, weak passwords, missing token expiry, session tokens not invalidated on logout.
 
 **Vulnerable:**
 ```python
 def create_token(user_id: int) -> str:
-    return jwt.encode({"sub": user_id}, SECRET)   # no expiry — token valid forever
+    return jwt.encode({"sub": user_id}, SECRET)   # no expiry — valid forever
+
+async def login(email: str, password: str):
+    user = await repo.get_by_email(email)
+    if user.password == password:                  # plain text comparison — should never happen
+        return create_token(user.id)
 ```
 
 **Fixed:**
 ```python
-from datetime import datetime, timedelta, timezone
-
 def create_access_token(sub: str, secret: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(minutes=15)   # short-lived
+    exp = datetime.now(timezone.utc) + timedelta(minutes=15)    # short-lived
     return jwt.encode({"sub": sub, "exp": exp, "type": "access"}, secret, algorithm="HS256")
 
 def create_refresh_token(sub: str, secret: str) -> str:
@@ -204,105 +248,140 @@ def decode_token(token: str, secret: str) -> dict:
         raise UnauthorizedAccessError("Invalid token")
 ```
 
-Also: enforce minimum password length in the entity, invalidate refresh tokens on logout (store revoked tokens in Redis with TTL).
+On logout, store the revoked refresh token in Redis with a TTL matching its expiry. On refresh, check the revocation list before issuing new tokens.
 
 ---
 
-## A08 — Software and Data Integrity Failures
+## A08:2025 — Software or Data Integrity Failures
 
-Running code you didn't verify — unsigned packages, auto-update without checksum, deserialization of untrusted data.
+Running code you haven't verified — unsigned packages, tampered build artifacts, unsafe deserialization of untrusted data.
 
-**Prevention:**
-```bash
-# Lock file pins exact hashes — never install without it
-poetry install   # uses poetry.lock with content hashes
-
-# Verify Docker base images with digest pinning
-FROM python:3.11-slim@sha256:abc123...   # digest, not floating tag
-```
-
+**Vulnerable:**
 ```python
-# Never deserialize untrusted pickle data
 import pickle
-data = pickle.loads(user_supplied_bytes)   # ← arbitrary code execution
+user_data = pickle.loads(request.body)   # arbitrary code execution — never do this
 
-# Use JSON or Pydantic for external data
-body = UserDto.model_validate_json(request_body)   # ← typed, validated
+# Unpinned CI action — tag can be silently redirected to malicious code
+- uses: actions/checkout@v4   # "v4" is a tag, not a content hash
 ```
+
+**Fixed:**
+```python
+# Never deserialize untrusted pickle — use JSON + Pydantic instead
+body = UserDto.model_validate_json(raw_bytes)   # typed, validated, safe
+
+# Pin Docker base images to digest — immutable content address
+FROM python:3.11-slim@sha256:a1b2c3d4...   # this exact image layer, forever
+
+# Pin CI actions to SHA
+- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+```
+
+Use `poetry.lock` with content hashes at every deployment — never `pip install requests` without a hash.
 
 ---
 
-## A09 — Security Logging and Monitoring Failures
+## A09:2025 — Security Logging and Alerting Failures
 
-Attacks succeed silently because there are no logs or nobody reads them.
+Attacks succeed silently — nobody notices the breach until the damage is done.
 
 **What must be logged:**
 ```python
 import logging
-logger = logging.getLogger(__name__)
+import structlog   # structured JSON logging for production
 
-# Log authentication events
-logger.warning("Failed login attempt", extra={"email": body.email, "ip": request.client.host})
-logger.info("User logged in", extra={"user_id": user.id})
+logger = structlog.get_logger()
 
-# Log authorization failures
-logger.warning("Access denied", extra={"user_id": current_user.id, "resource": invoice_id})
+# Authentication events
+logger.warning("login_failed", email=body.email, ip=request.client.host)
+logger.info("login_success", user_id=user.id)
 
-# Log data mutations
-logger.info("Invoice created", extra={"user_id": current_user.id, "invoice_id": result.id})
+# Authorization failures
+logger.warning("access_denied", user_id=current_user.id, resource="invoice", resource_id=invoice_id)
+
+# Data mutations — who changed what, when
+logger.info("invoice_created", user_id=current_user.id, invoice_id=result.id, tenant_id=current_user.tenant_id)
+logger.info("user_deleted", actor_id=admin.id, target_user_id=user_id)
 ```
 
-**What NOT to log:**
+**What NEVER to log:**
 ```python
-logger.info(f"Login: email={email} password={password}")   # ← never log passwords
-logger.debug(f"Token: {token}")                             # ← never log tokens
+logger.info(f"login attempt: email={email} password={password}")  # never log passwords
+logger.debug(f"token issued: {token}")                             # never log tokens
+logger.info(f"card: {card_number}")                               # never log PAN/PII
 ```
 
-Use structured logging (JSON format) in production so logs can be queried by your observability stack.
+Set up alerts on: repeated login failures from one IP, access denied spikes, unusual off-hours admin actions.
 
 ---
 
-## A10 — Server-Side Request Forgery (SSRF)
+## A10:2025 — Mishandling of Exceptional Conditions *(new in 2025)*
 
-Your server fetches a URL supplied by the user — attacker points it at internal services.
+Applications that don't properly catch, respond to, and recover from error conditions expose internal state, fail open (grant access on error), or crash in ways that attackers can exploit.
 
-**Vulnerable:**
+**Vulnerable — fail open:**
 ```python
-@router.post("/fetch-preview")
-async def fetch_preview(url: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)   # ← attacker can request http://169.254.169.254/
-    return {"content": response.text}
+async def get_current_user(token: str) -> User:
+    try:
+        payload = jwt.decode(token, SECRET, algorithms=["HS256"])
+        user = await repo.get_by_id(payload["sub"])
+        return user
+    except Exception:
+        pass   # any error silently returns None — caller may treat None as "anonymous admin"
 ```
 
-**Fixed — allowlist external domains:**
+**Vulnerable — exception leaks internals:**
 ```python
-from urllib.parse import urlparse
-
-ALLOWED_SCHEMES = {"https"}
-ALLOWED_DOMAINS = {"api.stripe.com", "hooks.slack.com"}
-
-def validate_external_url(url: str) -> str:
-    parsed = urlparse(url)
-    if parsed.scheme not in ALLOWED_SCHEMES:
-        raise ValueError(f"URL scheme '{parsed.scheme}' not allowed")
-    if parsed.hostname not in ALLOWED_DOMAINS:
-        raise ValueError(f"Domain '{parsed.hostname}' not in allowlist")
-    return url
+@router.get("/users/{user_id}")
+async def get_user(user_id: int, session=Depends(get_session)):
+    user = await session.get(User, user_id)
+    return user   # raises UnmappedInstanceError if user is None — full stack trace to client
 ```
 
-Block requests to private IP ranges (`10.x`, `172.16.x`, `192.168.x`, `169.254.x`) explicitly when a full allowlist is not possible.
+**Fixed — fail closed, handle specifically, centralize handling:**
+```python
+# Always fail closed — on any auth error, deny access
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session=Depends(get_session)) -> User:
+    try:
+        payload = jwt.decode(token, get_config().JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = await UserRepository(session).get_by_id(int(payload["sub"]))
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")   # still 401, not 404
+    return user
+
+# Global handler — strip internals in production, never let unhandled exceptions reach clients
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("unhandled_exception", path=request.url.path, error=str(exc), exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+# Handle None explicitly — never let it propagate as an ORM error
+@router.get("/users/{user_id}", response_model=UserDto)
+async def get_user(user_id: int, session=Depends(get_session)) -> UserDto:
+    try:
+        return await GetUserByIdUseCase(UserRepository(session)).execute(user_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+```
 
 ---
 
 ## Quick Checklist
 
-- [ ] All data queries are scoped to the authenticated user (`owner_id` / `tenant_id`)
-- [ ] No secrets in source code — all from environment variables via pydantic-settings with `Field(...)`
-- [ ] Passwords use bcrypt, tokens use HS256 with expiry
-- [ ] No string interpolation in SQL — all queries use SQLAlchemy ORM or bound parameters
-- [ ] `DEBUG=False` in production, error handler strips stack traces
-- [ ] `poetry.lock` committed, `pip-audit` runs in CI
-- [ ] Login endpoint has rate limiting
-- [ ] Authentication, authorization failures, and data mutations are logged (without sensitive values)
-- [ ] External URL fetching validates scheme and allowlisted domains
+- [ ] All data queries are scoped to `owner_id` / `tenant_id` — checked in use cases, not routes
+- [ ] `JWT_SECRET`, `DATABASE_URL`, and all secrets use `Field(...)` with no default — crash at startup if missing
+- [ ] `poetry.lock` committed, `pip-audit` runs in CI — breaks build on any CVE
+- [ ] CI actions pinned to SHA, not floating tags
+- [ ] SBOM generated and stored with each release
+- [ ] No string interpolation in SQL — SQLAlchemy ORM or bound `:param` placeholders only
+- [ ] Rate limiting on `/auth/login` and `/auth/forgot-password`
+- [ ] Access tokens expire in ≤15 minutes, refresh tokens are revocable
+- [ ] No `pickle.loads()` on untrusted data — Pydantic `model_validate_json()` instead
+- [ ] Auth functions never `pass` on exceptions — always fail closed with `HTTPException(401)`
+- [ ] Global unhandled exception handler strips stack traces in production
+- [ ] Login failures, access denials, and data mutations are logged with structured JSON (no passwords, tokens, or PAN)
