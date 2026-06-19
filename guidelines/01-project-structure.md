@@ -11,7 +11,7 @@ src/
 ├── domain/          ← Core business objects. Zero external dependencies.
 ├── application/     ← Orchestrates domain + infrastructure. No HTTP, no SQL.
 ├── infrastructure/  ← Implements interfaces. Knows about DBs, filesystems, APIs.
-└── presentation/    ← Thin protocol layer. Translates HTTP/MCP ↔ application DTOs.
+└── presentation/    ← Thin HTTP layer. Translates HTTP ↔ application DTOs.
 ```
 
 The dependency rule is **inward only**:
@@ -28,7 +28,7 @@ Nothing in `domain/` imports from any other layer. Nothing in `application/` imp
 ```
 src/
 ├── __init__.py
-├── mcp_main.py                  ← Server factory (entry point)
+├── api_main.py                  ← FastAPI app factory (entry point)
 ├── config/
 │   ├── constants.py             ← Static string constants (class C)
 │   └── settings/
@@ -50,9 +50,8 @@ src/
 │   │   └── <entity>_repository.py  ← Concrete SQLAlchemy / filesystem implementation
 │   └── services/                ← External APIs, token services, blob storage
 ├── presentation/
-│   ├── view.py                  ← Registers all tools/routes into the server
-│   ├── tools/                   ← MCP tool handlers (one file per domain)
-│   └── resources/               ← MCP resource handlers
+│   ├── view.py                  ← Registers all routers and middleware into the app
+│   └── routes/                  ← FastAPI APIRouter handlers (one file per domain)
 └── utils/
     └── exc.py                   ← Typed domain exceptions
 ```
@@ -79,7 +78,7 @@ src/
 | Abstract repository interface | `infrastructure/repositories/contract.py` |
 | SQLAlchemy implementation | `infrastructure/repositories/<entity>_repository.py` |
 | JWT / bcrypt / API call | `infrastructure/services/` |
-| HTTP route / MCP tool | `presentation/tools/` or `presentation/routes/` |
+| FastAPI route handler | `presentation/routes/` |
 | Custom exception | `utils/exc.py` |
 | App-wide strings | `config/constants.py` |
 | Environment config | `config/settings/` |
@@ -113,4 +112,4 @@ This is the first thing AI will generate if you don't constrain it. One file con
 - [ ] No `src/infrastructure/` import appears in `src/application/`
 - [ ] No `src/presentation/` import appears in `src/application/`
 - [ ] Use cases are one-per-file with a single `execute()` method
-- [ ] Routes/tools contain no business logic (max ~10 lines)
+- [ ] Route handlers contain no business logic (max ~10 lines)

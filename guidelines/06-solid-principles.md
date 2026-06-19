@@ -37,7 +37,7 @@ class NoteService:
 
 Adding a new use case (`ExportNoteUseCase`) requires:
 - Creating `src/application/use_cases/note/export.py` ← new file
-- Creating `src/presentation/tools/note.py` ← add one `@mcp.tool` registration
+- Adding one `@router.get` endpoint in `src/presentation/routes/note.py`
 
 What you do NOT touch: `contract.py`, `note_repository.py`, any existing use case.
 
@@ -110,7 +110,7 @@ Import trace:
 # application/use_cases/note/create.py
 from src.infrastructure.repositories.contract import NoteRepositoryInterface  # ✅ abstract
 
-# presentation/tools/note.py
+# presentation/routes/note.py
 from src.infrastructure.repositories.note_repository import NoteRepository    # ✅ only here
 from src.infrastructure.repositories.contract import NoteRepositoryInterface  # not needed here
 ```
@@ -133,4 +133,4 @@ The use case never imports `NoteRepository`. This means you can replace the data
 - [ ] New features are new files, not modifications to existing ones
 - [ ] Use cases import from `contract.py`, never from concrete repository files
 - [ ] Each aggregate has its own repository interface
-- [ ] Concrete classes are only instantiated in the presentation/tools layer
+- [ ] Concrete classes are only instantiated in the presentation/routes layer

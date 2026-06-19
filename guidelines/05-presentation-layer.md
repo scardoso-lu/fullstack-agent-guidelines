@@ -1,146 +1,267 @@
-# Presentation Layer: MCP Tools and Routes
+# Presentation Layer: FastAPI Routes
 
-The presentation layer is the thinnest layer. It translates between the external protocol (HTTP, MCP) and the application layer. It contains zero business logic — only wiring.
+The presentation layer is the thinnest layer. It translates between HTTP and the application layer. It contains zero business logic — only wiring.
 
 ## The Thin Layer Rule
 
-If a tool or route handler exceeds ~10 lines, something that belongs in a use case has leaked into the presentation layer.
+If a route handler exceeds ~10 lines, something that belongs in a use case has leaked into the presentation layer.
 
-**Correct pattern — 4 lines of wiring:**
+**Correct pattern — 5 lines of wiring:**
 
 ```python
-@mcp.tool(name="create_note", description="Create a new note.")
-async def create_note(title: str, content: str = "") -> dict:
-    async with get_session() as session:
-        use_case = CreateNoteUseCase(NoteRepository(session))
-        note = await use_case.execute(CreateNoteDto(title=title, content=content))
-        return note.model_dump()
+@router.post("/users", response_model=UserDto, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    body: CreateUserDto,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> UserDto:
+    return await CreateUserUseCase(UserRepository(session)).execute(body)
 ```
 
-The tool handler does exactly three things:
-1. Sets up the dependency (session + repository)
-2. Instantiates and calls the use case
-3. Serializes the result
+The handler does exactly three things:
+1. Declares the input shape (`body: CreateUserDto`) and output shape (`response_model=UserDto`)
+2. Sets up the dependency (`session` via `Depends`)
+3. Delegates everything to the use case
 
-## The `register_*` Pattern
+## APIRouter — One File Per Domain
 
-Tools and resources are grouped in registration functions — not declared at module level. This keeps `mcp_main.py` clean and makes the wiring explicit:
+Never register routes on `app` directly. Use `APIRouter` so each domain module is self-contained:
+
+```python
+# src/presentation/routes/user.py
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Annotated
+
+from src.application.dto.user_dto import CreateUserDto, UserDto, UserListDto
+from src.application.use_cases.user.create import CreateUserUseCase
+from src.application.use_cases.user.list_all import ListUsersUseCase
+from src.infrastructure.db.engine import get_session
+from src.infrastructure.repositories.user_repository import UserRepository
+
+router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get("/", response_model=UserListDto)
+async def list_users(session: Annotated[AsyncSession, Depends(get_session)]) -> UserListDto:
+    return await ListUsersUseCase(UserRepository(session)).execute()
+
+
+@router.post("/", response_model=UserDto, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    body: CreateUserDto,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> UserDto:
+    return await CreateUserUseCase(UserRepository(session)).execute(body)
+```
+
+## view.py — The Wiring Hub
+
+All routers and middleware are registered in one place. `api_main.py` stays clean:
 
 ```python
 # src/presentation/view.py
-def register_mcp_tools(mcp: FastMCP) -> None:
-    register_health_tools(mcp)
-    register_guideline_tools(mcp)
-    register_guideline_resources(mcp)
-```
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-```python
-# src/presentation/tools/guideline.py
-def register_guideline_tools(mcp: FastMCP) -> None:
-    @mcp.tool(name="list_guidelines", description="...")
-    async def list_guidelines() -> dict: ...
+from src.presentation.routes.auth import router as auth_router
+from src.presentation.routes.user import router as user_router
+from src.config.constants import C
 
-    @mcp.tool(name="get_guideline", description="...")
-    async def get_guideline(slug: str) -> dict: ...
-```
 
-This mirrors the FastAPI router pattern (`app.include_router(note_router, ...)`) from mdip-backend:
+def register_api_routes(app: FastAPI) -> None:
+    app.include_router(auth_router, prefix=C.URL_PREFIX)
+    app.include_router(user_router, prefix=C.URL_PREFIX)
 
-```python
-# src/presentation/view.py (mdip-backend)
-def register_api_routes(app: FastAPI):
-    app.include_router(health_router, ...)
-    app.include_router(auth_router, tags=["Authentication"], prefix=C.URL_PREFIX)
-    app.include_router(note_router, tags=["Note"], prefix=C.URL_PREFIX)
-```
 
-## MCP Tools vs MCP Resources
-
-| Concept | Use for | Returns | Example URI |
-|---|---|---|---|
-| `@mcp.tool()` | Actions and queries | `dict` or `str` | Called as function |
-| `@mcp.resource()` | Content by identifier | `str` (markdown/text) | `guidelines://08-security` |
-
-Tools are invoked explicitly by the agent. Resources can be referenced by URI in prompts:
-
-```python
-# src/presentation/resources/guideline.py
-def register_guideline_resources(mcp: FastMCP) -> None:
-    @mcp.resource("guidelines://{slug}")
-    async def guideline_resource(slug: str) -> str:
-        use_case = GetGuidelineBySlugUseCase(get_guideline_repository())
-        try:
-            result = await use_case.execute(slug)
-            return result.content
-        except NotFoundError:
-            return f"Guideline '{slug}' not found."
-```
-
-## FastAPI Route Pattern (from mdip-backend)
-
-```python
-# src/presentation/routes/authentication.py
-@auth_router.post("/login", response_model=AuthSuccessDto)
-async def login(data: AuthDto, session: Annotated[AsyncSession, Depends(get_session)]):
-    user_repository = IUserRepository(session)
-    access_token_service = IAccessTokenService(get_config().JWT_SECRET)
-    refresh_token_service = IRefreshTokenService(get_config().JWT_SECRET)
-    login_use_case = UserLoginUseCase(
-        user_repository, access_token_service, refresh_token_service
+def register_middleware(app: FastAPI) -> None:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],   # tighten in production via settings
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
-    return await login_use_case.execute(AuthDto(username=data.username, password=data.password))
-    except UnauthorizedAccessError as e:
-        return e.as_response(status_code=status.HTTP_401_UNAUTHORIZED)
 ```
-
-Key observations:
-- `response_model=AuthSuccessDto` declares the return shape for docs and validation
-- `Depends(get_session)` wires the DB session via FastAPI DI
-- `IUserRepository` is the interface from `contract.py` — not the concrete `UserRepository`
-- Exception mapping happens here (domain error → HTTP status)
-
-## Error Handling in Tools
-
-Catch domain errors in the tool handler and return structured dicts — never raise from a tool:
 
 ```python
-@mcp.tool(name="delete_note", description="Delete a note by ID.")
-async def delete_note(note_id: str) -> dict:
-    async with get_session() as session:
-        try:
-            use_case = DeleteNoteUseCase(NoteRepository(session))
-            await use_case.execute(int(note_id))
-            return {"deleted": True, "note_id": note_id}
-        except NotFoundError as exc:
-            return {"deleted": False, "error": str(exc)}
+# src/api_main.py
+from fastapi import FastAPI
+from src.config.constants import C
+from src.presentation.view import register_api_routes, register_middleware
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title=C.TITLE, version=C.PROJECT_VERSION)
+    register_middleware(app)
+    register_api_routes(app)
+    return app
+
+
+app = create_app()
 ```
 
-## Server Factory (mcp_main.py)
+## response_model — Always Declare It
+
+`response_model` enforces the output schema, strips extra fields, and generates OpenAPI docs automatically:
 
 ```python
-# src/mcp_main.py
-def create_mcp_server() -> FastMCP:
-    """MCP server factory — mirrors api_main.py from FastAPI projects."""
-    config = get_config()
-    server = FastMCP(name=C.TITLE, version=C.PROJECT_VERSION)
-    server.settings.host = config.MCP_HOST
-    server.settings.port = config.MCP_PORT
-    register_mcp_tools(server)
-    return server
+# ✅ CORRECT — output is validated and documented
+@router.get("/{user_id}", response_model=UserDto)
+async def get_user(user_id: int, ...) -> UserDto: ...
 
-mcp = create_mcp_server()
-
-if __name__ == "__main__":
-    mcp.run(transport=get_config().MCP_TRANSPORT)
+# ❌ WRONG — no schema enforcement, no docs, silent data leaks
+@router.get("/{user_id}")
+async def get_user(user_id: int, ...):
+    return user_orm_object   # may expose _password_hash, internal fields, etc.
 ```
 
-The factory function makes it easy to create test instances and swap configuration.
+## Depends() — Dependency Injection
+
+`Depends()` wires external resources into route handlers without global state:
+
+```python
+# src/infrastructure/db/engine.py
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session_factory() as session:
+        yield session
+        await session.commit()
+
+
+# Route receives the session automatically — no manual setup
+@router.get("/{user_id}", response_model=UserDto)
+async def get_user(
+    user_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> UserDto:
+    return await GetUserByIdUseCase(UserRepository(session)).execute(user_id)
+```
+
+For auth, a reusable dependency extracts the current user from the JWT:
+
+```python
+# src/infrastructure/services/auth_dependency.py
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> User:
+    payload = decode_access_token(token)   # raises UnauthorizedAccessError if invalid
+    return await UserRepository(session).get_by_sub(payload["sub"])
+
+
+# Any route can require authentication with one line:
+@router.get("/me", response_model=UserDto)
+async def get_me(current_user: Annotated[User, Depends(get_current_user)]) -> UserDto:
+    return UserDto.model_validate(current_user)
+```
+
+## Exception Handling — Domain Errors → HTTP
+
+Catch domain errors at the presentation boundary and convert to HTTP status codes:
+
+```python
+from fastapi import HTTPException, status
+from src.utils.exc import NotFoundError, UnauthorizedAccessError
+
+@router.get("/{user_id}", response_model=UserDto)
+async def get_user(user_id: int, session: Annotated[AsyncSession, Depends(get_session)]) -> UserDto:
+    try:
+        return await GetUserByIdUseCase(UserRepository(session)).execute(user_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+```
+
+For global handling across all routes, register exception handlers on the app:
+
+```python
+# src/presentation/view.py
+def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(NotFoundError)
+    async def not_found_handler(request: Request, exc: NotFoundError):
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(UnauthorizedAccessError)
+    async def unauthorized_handler(request: Request, exc: UnauthorizedAccessError):
+        return JSONResponse(status_code=401, content={"detail": str(exc)})
+```
+
+## HTTP Status Codes — Use Them Correctly
+
+| Operation | Status code |
+|---|---|
+| Resource created | `201 Created` |
+| Successful read/update | `200 OK` |
+| Successful delete | `204 No Content` |
+| Not found | `404 Not Found` |
+| Invalid input | `422 Unprocessable Entity` (FastAPI default) |
+| Unauthorized | `401 Unauthorized` |
+| Forbidden | `403 Forbidden` |
+
+```python
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, session: Annotated[AsyncSession, Depends(get_session)]) -> None:
+    await DeleteUserUseCase(UserRepository(session)).execute(user_id)
+```
+
+## Authentication Route Pattern
+
+```python
+# src/presentation/routes/auth.py
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/login", response_model=AuthSuccessDto)
+async def login(
+    body: AuthDto,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AuthSuccessDto:
+    try:
+        return await UserLoginUseCase(
+            UserRepository(session),
+            AccessTokenService(get_config().JWT_SECRET),
+            RefreshTokenService(get_config().JWT_SECRET),
+        ).execute(body)
+    except UnauthorizedAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+
+@router.post("/refresh", response_model=AuthSuccessDto)
+async def refresh(body: RefreshDto, session: Annotated[AsyncSession, Depends(get_session)]) -> AuthSuccessDto:
+    try:
+        return await RefreshTokenUseCase(
+            UserRepository(session),
+            AccessTokenService(get_config().JWT_SECRET),
+            RefreshTokenService(get_config().JWT_SECRET),
+        ).execute(body)
+    except UnauthorizedAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+```
+
+## Anti-Pattern: Fat Route
+
+```python
+# ❌ WRONG — business logic, SQL, and hashing all inside the route handler
+@router.post("/users")
+async def create_user(email: str, password: str, db: AsyncSession = Depends(get_session)):
+    existing = await db.execute(select(User).where(User.email == email))
+    if existing.scalars().first():
+        raise HTTPException(400, "Email already in use")   # business rule in route
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()  # hashing in route
+    user = User(email=email, _password_hash=hashed)
+    db.add(user)
+    await db.commit()
+    token = jwt.encode({"sub": str(user.id)}, SECRET_KEY)   # token logic in route
+    return {"token": token}
+```
+
+This is untestable, irreplaceable, and impossible to reuse. Every concern that should live in a use case or entity is jammed into one function.
 
 ## Quick Checklist
 
-- [ ] Tool/route handlers are ≤ 10 lines
-- [ ] No business logic, validation, or SQL in tool handlers
-- [ ] Domain errors are caught and mapped to return values (MCP) or HTTP status (FastAPI)
-- [ ] `response_model` is declared on FastAPI routes for documentation and validation
-- [ ] Tools return `dict` or `str`, not Pydantic models or SQLAlchemy entities directly
-- [ ] `register_*` functions group related tools — no module-level `@mcp.tool` decorators
+- [ ] Route handlers are ≤ 10 lines — no SQL, no hashing, no business rules
+- [ ] Every route has `response_model` declared for validation and OpenAPI docs
+- [ ] `Depends(get_session)` is the only way to get a DB session — no manual `AsyncSession()` calls
+- [ ] Domain errors (`NotFoundError`, `UnauthorizedAccessError`) are caught here and mapped to `HTTPException`
+- [ ] All routers are registered in `view.py`, never directly on `app` in `api_main.py`
+- [ ] `status_code=201` on create, `204` on delete
+- [ ] Auth-protected routes use `Depends(get_current_user)` — one line, no token parsing in the handler

@@ -6,7 +6,7 @@ Good tests prove that business rules work — not that Python syntax is correct.
 
 - **Unit tests** cover use cases — fast, no I/O, no database, mock the repository
 - **Integration tests** cover repositories — real filesystem or DB, no mocking
-- **No end-to-end tests** in this codebase — MCP protocol testing is done manually with `mcp dev`
+- **Integration tests** for routes use FastAPI's `AsyncClient` (httpx) — no running server needed
 
 ## pytest-asyncio Setup
 
@@ -122,6 +122,40 @@ async def test_create_note_success(mock_repo):
 
 This structure makes it immediately clear what each test is checking.
 
+## FastAPI Route Integration Tests
+
+Use `httpx.AsyncClient` with `app` to test routes end-to-end in memory — no running server, no real DB needed when you override `get_session` with a test DB:
+
+```python
+# test/integration/routes/test_user_routes.py
+import pytest
+from httpx import AsyncClient, ASGITransport
+
+from src.api_main import create_app
+
+app = create_app()
+
+
+@pytest.mark.asyncio
+async def test_create_user_returns_201():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/users", json={"email": "a@b.com", "password": "secret"})
+
+    assert response.status_code == 201
+    assert response.json()["email"] == "a@b.com"
+    assert "password" not in response.json()   # ← verify sensitive fields are stripped
+
+
+@pytest.mark.asyncio
+async def test_get_user_not_found_returns_404():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/users/99999")
+
+    assert response.status_code == 404
+```
+
+Route tests verify that HTTP wiring is correct (status codes, response shape, auth headers). They do NOT test business logic — that's already covered by use case unit tests.
+
 ## Repository Tests with Real Filesystem
 
 For filesystem-based repositories, use real files in a `test/fixtures/` directory:
@@ -154,12 +188,11 @@ async def test_cache_populated_after_first_call():
 # pyproject.toml
 [tool.coverage.report]
 omit = [
-    'src/mcp_main.py',        # wire-up code, not logic
+    'src/api_main.py',        # wire-up code, not logic
     'src/config/*',           # configuration, not logic
     'src/utils/exc.py',       # exception definitions
     'src/application/dto/*',  # Pydantic models, no logic
-    'src/presentation/tools/*',    # thin wiring
-    'src/presentation/resources/*',
+    'src/presentation/routes/*',   # thin wiring
 ]
 
 exclude_also = [
