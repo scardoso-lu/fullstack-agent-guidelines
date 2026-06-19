@@ -9,7 +9,8 @@ import aiofiles
 from src.domain.entities.example import Example
 from src.infrastructure.repositories.contract import ExampleRepositoryInterface
 
-_LAYERS = ("domain", "application", "infrastructure", "presentation")
+_LAYERS = ("domain", "application", "infrastructure", "presentation", "frontend")
+_GLOBS = ("*.py", "*.ts", "*.tsx")
 
 
 class ExampleRepository(ExampleRepositoryInterface):
@@ -31,7 +32,10 @@ class ExampleRepository(ExampleRepositoryInterface):
             layer_dir = Path(self._dir) / layer
             if not layer_dir.is_dir():
                 continue
-            for path in sorted(layer_dir.glob("*.py")):
+            paths = sorted(
+                p for glob in _GLOBS for p in layer_dir.glob(glob)
+            )
+            for path in paths:
                 async with aiofiles.open(path, encoding="utf-8") as f:
                     content = await f.read()
                 examples.append(

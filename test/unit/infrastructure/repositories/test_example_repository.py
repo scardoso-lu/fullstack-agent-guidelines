@@ -10,10 +10,11 @@ FIXTURES_DIR = Path(__file__).resolve().parents[3] / "fixtures" / "examples"
 async def test_get_all_loads_fixture_files():
     repo = ExampleRepository(FIXTURES_DIR)
     results = await repo.get_all()
-    assert len(results) == 2
+    assert len(results) == 3
     names = {e.name for e in results}
     assert "domain/01_test_fixture" in names
     assert "application/01_test_fixture" in names
+    assert "frontend/01_test_fixture" in names
 
 
 @pytest.mark.asyncio
@@ -66,4 +67,4 @@ async def test_cache_populated_after_first_call():
     repo = ExampleRepository(FIXTURES_DIR)
     await repo.get_all()
     assert repo._cache is not None
-    assert len(repo._cache) == 2
+    assert len(repo._cache) == 3

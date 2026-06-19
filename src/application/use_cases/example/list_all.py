@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.application.dto.example_dto import ExampleListDto, ExampleSummaryDto
 from src.infrastructure.repositories.contract import ExampleRepositoryInterface
 
-_VALID_LAYERS = {"domain", "application", "infrastructure", "presentation"}
+_VALID_LAYERS = {"domain", "application", "infrastructure", "presentation", "frontend"}
 
 
 class ListExamplesUseCase:
