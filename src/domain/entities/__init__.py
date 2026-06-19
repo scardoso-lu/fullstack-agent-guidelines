@@ -1,3 +1,3 @@
-from src.domain.entities.note import Note
+from src.domain.entities.guideline import Guideline
 
-__all__ = ["Note"]
+__all__ = ["Guideline"]

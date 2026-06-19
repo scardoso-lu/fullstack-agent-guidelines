@@ -1,12 +1,16 @@
-from typing import List, Literal
+from pathlib import Path
+from typing import Literal
 
 EnvType = Literal["PROD", "DEV", "TEST"]
+
+# Resolves to the repo root regardless of CWD:
+# base.py lives at src/config/settings/base.py → parents[3] = repo root
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class BaseEnvs:
     ENVIRONMENT: EnvType = "PROD"
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost/notes_mcp"
-    DATABASE_ECHO: bool = False
+    GUIDELINES_DIR: str = str(_REPO_ROOT / "guidelines")
     MCP_TRANSPORT: Literal["stdio", "sse"] = "stdio"
     MCP_HOST: str = "0.0.0.0"
     MCP_PORT: int = 8000

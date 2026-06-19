@@ -1,15 +1,15 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
-from src.config.settings.base import BaseEnvs, EnvType
+from src.config.settings.base import BaseEnvs, EnvType, _REPO_ROOT
 
 
 class Settings(BaseSettings, BaseEnvs):
     ENVIRONMENT: EnvType = "PROD"
-    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost/notes_mcp"
-    DATABASE_ECHO: bool = False
+    GUIDELINES_DIR: str = str(_REPO_ROOT / "guidelines")
     MCP_TRANSPORT: str = "stdio"
     MCP_HOST: str = "0.0.0.0"
     MCP_PORT: int = 8000
@@ -22,8 +22,7 @@ class Settings(BaseSettings, BaseEnvs):
 
 class TestSettings(Settings):
     ENVIRONMENT: EnvType = "TEST"
-    DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
-    DATABASE_ECHO: bool = False
+    GUIDELINES_DIR: str = str(_REPO_ROOT / "test" / "fixtures" / "guidelines")
 
 
 _ENV_MAP: dict[str, type[Settings]] = {
@@ -36,5 +35,4 @@ _ENV_MAP: dict[str, type[Settings]] = {
 @lru_cache(maxsize=1)
 def get_config() -> Settings:
     env = os.getenv("ENVIRONMENT", "PROD")
-    config_class = _ENV_MAP.get(env, Settings)
-    return config_class()
+    return _ENV_MAP.get(env, Settings)()
