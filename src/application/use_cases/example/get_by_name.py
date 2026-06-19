@@ -17,6 +17,7 @@ class GetExampleByNameUseCase:
             raise NotFoundError(f"Example '{name}' not found")
         return ExampleDto(
             name=example.name,
+            stack=example.stack,
             layer=example.layer,
             filename=example.filename,
             description=example.description,

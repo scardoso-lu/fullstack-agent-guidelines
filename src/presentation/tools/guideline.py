@@ -12,18 +12,26 @@ def register_guideline_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="list_guidelines",
-        description="List all available architecture guideline topics with their slugs and tags.",
+        description=(
+            "List available architecture guidelines. "
+            "Pass stack='backend' or stack='frontend' to filter by technology. "
+            "Returns slugs, titles, and tags — use get_guideline to fetch full content."
+        ),
     )
-    async def list_guidelines() -> dict:
-        use_case = ListGuidelinesUseCase(get_guideline_repository())
-        result = await use_case.execute()
-        return result.model_dump()
+    async def list_guidelines(stack: str | None = None) -> dict:
+        try:
+            use_case = ListGuidelinesUseCase(get_guideline_repository())
+            result = await use_case.execute(stack)
+            return result.model_dump()
+        except ValueError as exc:
+            return {"error": str(exc)}
 
     @mcp.tool(
         name="get_guideline",
         description=(
             "Retrieve the full Markdown content of a specific guideline by its slug "
-            "(e.g. '03-application-layer'). Call list_guidelines first to see available slugs."
+            "(e.g. 'backend/03-application-layer' or 'frontend/02-server-vs-client'). "
+            "Call list_guidelines first to see available slugs."
         ),
     )
     async def get_guideline(slug: str) -> dict:
@@ -36,7 +44,7 @@ def register_guideline_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="search_guidelines",
-        description="Search guidelines by keyword. Searches titles, content, and tags.",
+        description="Search guidelines by keyword across all stacks. Searches titles, content, and tags.",
     )
     async def search_guidelines(query: str) -> dict:
         use_case = SearchGuidelinesUseCase(get_guideline_repository())
@@ -46,10 +54,12 @@ def register_guideline_tools(mcp: FastMCP) -> None:
     @mcp.tool(
         name="get_all_context",
         description=(
-            "Return all 12 guidelines concatenated into one document. "
-            "Use when you need complete architectural context injected at once."
+            "Return all guidelines concatenated into one document. "
+            "Pass stack='backend' or stack='frontend' to limit scope. "
+            "Use for full architectural context injection into an agent."
         ),
     )
-    async def get_all_context() -> str:
-        use_case = GetAllContextUseCase(get_guideline_repository())
-        return await use_case.execute()
+    async def get_all_context(stack: str | None = None) -> str:
+        repo = get_guideline_repository()
+        use_case = GetAllContextUseCase(repo)
+        return await use_case.execute(stack)

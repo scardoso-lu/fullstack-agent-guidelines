@@ -11,14 +11,15 @@ def register_example_tools(mcp: FastMCP) -> None:
     @mcp.tool(
         name="list_examples",
         description=(
-            "List available annotated code examples organized by architectural layer. "
-            "Pass layer='domain'|'application'|'infrastructure'|'presentation' to filter. "
-            "Each example shows a correct pattern and an anti-pattern to avoid."
+            "List annotated code examples. "
+            "Filter by stack='backend'|'frontend' and/or "
+            "layer='domain'|'application'|'infrastructure'|'presentation'|'frontend'. "
+            "Each example shows the correct pattern and what to avoid."
         ),
     )
-    async def list_examples(layer: str | None = None) -> dict:
+    async def list_examples(stack: str | None = None, layer: str | None = None) -> dict:
         try:
-            result = await ListExamplesUseCase(get_example_repository()).execute(layer)
+            result = await ListExamplesUseCase(get_example_repository()).execute(stack, layer)
             return result.model_dump()
         except ValueError as exc:
             return {"error": str(exc)}
@@ -26,8 +27,8 @@ def register_example_tools(mcp: FastMCP) -> None:
     @mcp.tool(
         name="get_example",
         description=(
-            "Get the full annotated Python source of a code example by name "
-            "(e.g. 'domain/01_entity' or 'presentation/02_fastapi_route'). "
+            "Get the full annotated source of a code example by name "
+            "(e.g. 'backend/domain/01_entity' or 'frontend/01_api_service'). "
             "Call list_examples first to see all available names."
         ),
     )

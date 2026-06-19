@@ -12,23 +12,24 @@ async def test_get_all_loads_all_fixture_files():
     results = await repo.get_all()
     assert len(results) == 2
     slugs = {g.slug for g in results}
-    assert "01-test-alpha" in slugs
-    assert "02-test-beta" in slugs
+    assert "backend/01-test-alpha" in slugs
+    assert "backend/02-test-beta" in slugs
 
 
 @pytest.mark.asyncio
 async def test_get_by_slug_found():
     repo = GuidelineRepository(FIXTURES_DIR)
-    g = await repo.get_by_slug("01-test-alpha")
+    g = await repo.get_by_slug("backend/01-test-alpha")
     assert g is not None
     assert g.title == "Test Alpha Guideline"
+    assert g.stack == "backend"
     assert "architecture" in g.content
 
 
 @pytest.mark.asyncio
 async def test_get_by_slug_missing_returns_none():
     repo = GuidelineRepository(FIXTURES_DIR)
-    g = await repo.get_by_slug("99-nonexistent")
+    g = await repo.get_by_slug("backend/99-nonexistent")
     assert g is None
 
 
@@ -36,7 +37,7 @@ async def test_get_by_slug_missing_returns_none():
 async def test_search_finds_keyword_in_content():
     repo = GuidelineRepository(FIXTURES_DIR)
     results = await repo.search("architecture")
-    assert any(g.slug == "01-test-alpha" for g in results)
+    assert any(g.slug == "backend/01-test-alpha" for g in results)
 
 
 @pytest.mark.asyncio
@@ -71,6 +72,6 @@ async def test_cache_is_populated_after_first_call():
 @pytest.mark.asyncio
 async def test_tags_derived_from_slug():
     repo = GuidelineRepository(FIXTURES_DIR)
-    g = await repo.get_by_slug("01-test-alpha")
+    g = await repo.get_by_slug("backend/01-test-alpha")
     assert "test" in g.tags
     assert "alpha" in g.tags

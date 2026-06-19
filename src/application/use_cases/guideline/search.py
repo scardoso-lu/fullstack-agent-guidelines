@@ -11,7 +11,9 @@ class SearchGuidelinesUseCase:
             raise ValueError("Search query cannot be empty")
         guidelines = await self.repo.search(query.strip())
         items = [
-            GuidelineDto(slug=g.slug, title=g.title, content=g.content, tags=g.tags)
+            GuidelineDto(
+                slug=g.slug, stack=g.stack, title=g.title, content=g.content, tags=g.tags
+            )
             for g in guidelines
         ]
         return SearchResultDto(items=items, query=query.strip(), total=len(items))

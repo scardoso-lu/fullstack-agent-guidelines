@@ -9,8 +9,9 @@ import aiofiles
 from src.domain.entities.example import Example
 from src.infrastructure.repositories.contract import ExampleRepositoryInterface
 
-_LAYERS = ("domain", "application", "infrastructure", "presentation", "frontend")
-_GLOBS = ("*.py", "*.ts", "*.tsx")
+_BACKEND_LAYERS = ("domain", "application", "infrastructure", "presentation")
+_FRONTEND_GLOBS = ("*.ts", "*.tsx")
+_BACKEND_GLOBS = ("*.py",)
 
 
 class ExampleRepository(ExampleRepositoryInterface):
@@ -27,26 +28,51 @@ class ExampleRepository(ExampleRepositoryInterface):
     async def _load_all(self) -> list[Example]:
         if self._cache is not None:
             return self._cache
+
         examples: list[Example] = []
-        for layer in _LAYERS:
-            layer_dir = Path(self._dir) / layer
-            if not layer_dir.is_dir():
-                continue
+        base = Path(self._dir)
+
+        # Backend: examples/backend/{layer}/*.py
+        backend_dir = base / "backend"
+        if backend_dir.is_dir():
+            for layer in _BACKEND_LAYERS:
+                layer_dir = backend_dir / layer
+                if not layer_dir.is_dir():
+                    continue
+                for path in sorted(layer_dir.glob("*.py")):
+                    async with aiofiles.open(path, encoding="utf-8") as f:
+                        content = await f.read()
+                    examples.append(
+                        Example(
+                            name=f"backend/{layer}/{path.stem}",
+                            stack="backend",
+                            layer=layer,
+                            filename=path.name,
+                            description=self._parse_description(content),
+                            content=content,
+                        )
+                    )
+
+        # Frontend: examples/frontend/*.ts | *.tsx
+        frontend_dir = base / "frontend"
+        if frontend_dir.is_dir():
             paths = sorted(
-                p for glob in _GLOBS for p in layer_dir.glob(glob)
+                p for glob in _FRONTEND_GLOBS for p in frontend_dir.glob(glob)
             )
             for path in paths:
                 async with aiofiles.open(path, encoding="utf-8") as f:
                     content = await f.read()
                 examples.append(
                     Example(
-                        name=f"{layer}/{path.stem}",
-                        layer=layer,
+                        name=f"frontend/{path.stem}",
+                        stack="frontend",
+                        layer="frontend",
                         filename=path.name,
                         description=self._parse_description(content),
                         content=content,
                     )
                 )
+
         self._cache = examples
         return self._cache
 

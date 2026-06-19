@@ -10,36 +10,50 @@ from src.domain.entities.example import Example
 def mock_repo():
     repo = MagicMock()
     repo.get_all = AsyncMock()
-    repo.get_by_layer = AsyncMock()
     return repo
 
 
 @pytest.mark.asyncio
 async def test_list_returns_all_examples(mock_repo):
     mock_repo.get_all.return_value = [
-        Example._mock("domain/01_entity", "domain"),
-        Example._mock("application/01_dto", "application"),
+        Example._mock("backend/domain/01_entity", "backend", "domain"),
+        Example._mock("frontend/01_api_service", "frontend", "frontend"),
     ]
 
     result = await ListExamplesUseCase(mock_repo).execute()
 
     assert isinstance(result, ExampleListDto)
     assert result.total == 2
+    assert result.stack_filter is None
     assert result.layer_filter is None
     mock_repo.get_all.assert_called_once()
 
 
 @pytest.mark.asyncio
+async def test_list_filters_by_stack(mock_repo):
+    mock_repo.get_all.return_value = [
+        Example._mock("backend/domain/01_entity", "backend", "domain"),
+        Example._mock("frontend/01_api_service", "frontend", "frontend"),
+    ]
+
+    result = await ListExamplesUseCase(mock_repo).execute(stack="backend")
+
+    assert result.total == 1
+    assert result.stack_filter == "backend"
+    assert result.items[0].name == "backend/domain/01_entity"
+
+
+@pytest.mark.asyncio
 async def test_list_filters_by_layer(mock_repo):
-    mock_repo.get_by_layer.return_value = [
-        Example._mock("domain/01_entity", "domain"),
+    mock_repo.get_all.return_value = [
+        Example._mock("backend/domain/01_entity", "backend", "domain"),
+        Example._mock("backend/application/01_dto", "backend", "application"),
     ]
 
     result = await ListExamplesUseCase(mock_repo).execute(layer="domain")
 
     assert result.total == 1
     assert result.layer_filter == "domain"
-    mock_repo.get_by_layer.assert_called_once_with("domain")
 
 
 @pytest.mark.asyncio
@@ -51,14 +65,14 @@ async def test_list_empty_repo_returns_zero(mock_repo):
 
 
 @pytest.mark.asyncio
-async def test_list_invalid_layer_raises_value_error(mock_repo):
-    with pytest.raises(ValueError, match="Unknown layer"):
-        await ListExamplesUseCase(mock_repo).execute(layer="nonexistent")
-    mock_repo.get_by_layer.assert_not_called()
+async def test_list_invalid_stack_raises_value_error(mock_repo):
+    with pytest.raises(ValueError, match="Unknown stack"):
+        await ListExamplesUseCase(mock_repo).execute(stack="nonexistent")
+    mock_repo.get_all.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_list_layer_filter_is_case_insensitive(mock_repo):
-    mock_repo.get_by_layer.return_value = []
-    await ListExamplesUseCase(mock_repo).execute(layer="DOMAIN")
-    mock_repo.get_by_layer.assert_called_once_with("domain")
+async def test_list_invalid_layer_raises_value_error(mock_repo):
+    with pytest.raises(ValueError, match="Unknown layer"):
+        await ListExamplesUseCase(mock_repo).execute(layer="nonexistent")
+    mock_repo.get_all.assert_not_called()

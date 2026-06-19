@@ -16,7 +16,9 @@ def mock_repo():
 @pytest.mark.asyncio
 async def test_search_returns_matching_results(mock_repo):
     # Arrange
-    mock_repo.search.return_value = [Guideline._mock("01-alpha", "Alpha")]
+    mock_repo.search.return_value = [
+        Guideline._mock(slug="backend/01-alpha", stack="backend", title="Alpha")
+    ]
 
     # Act
     result = await SearchGuidelinesUseCase(mock_repo).execute("alpha")
@@ -25,6 +27,7 @@ async def test_search_returns_matching_results(mock_repo):
     assert isinstance(result, SearchResultDto)
     assert result.query == "alpha"
     assert result.total == 1
+    assert result.items[0].stack == "backend"
     mock_repo.search.assert_called_once_with("alpha")
 
 

@@ -7,6 +7,8 @@ import aiofiles
 from src.domain.entities.guideline import Guideline
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
 
+_VALID_STACKS = ("backend", "frontend")
+
 
 class GuidelineRepository(GuidelineRepositoryInterface):
     def __init__(self, guidelines_dir: Path) -> None:
@@ -23,30 +25,35 @@ class GuidelineRepository(GuidelineRepositoryInterface):
         return match.group(1).strip() if match else ""
 
     @staticmethod
-    def _slug_from_path(path: Path) -> str:
-        return path.stem
-
-    @staticmethod
     def _tags_from_slug(slug: str) -> list[str]:
-        parts = slug.split("-")
+        # slug = "backend/01-project-structure" → tags from the filename part
+        filename = slug.split("/")[-1]
+        parts = filename.split("-")
         return [p for p in parts[1:] if p]
 
-    async def _read_file(self, path: Path) -> Guideline:
+    async def _read_file(self, path: Path, stack: str) -> Guideline:
         async with aiofiles.open(path, encoding="utf-8") as f:
             content = await f.read()
-        slug = self._slug_from_path(path)
-        title = self._parse_title(content) or slug
+        slug = f"{stack}/{path.stem}"
+        title = self._parse_title(content) or path.stem
         tags = self._tags_from_slug(slug)
-        return Guideline(slug=slug, title=title, content=content, tags=tags)
+        return Guideline(slug=slug, stack=stack, title=title, content=content, tags=tags)
 
     async def _load_all(self) -> dict[str, Guideline]:
         if self._cache is not None:
             return self._cache
-        md_files = sorted(Path(self._dir).glob("*.md"))
+
         cache: dict[str, Guideline] = {}
-        for path in md_files:
-            g = await self._read_file(path)
-            cache[g.slug] = g
+        base = Path(self._dir)
+
+        for stack in _VALID_STACKS:
+            stack_dir = base / stack
+            if not stack_dir.is_dir():
+                continue
+            for path in sorted(stack_dir.glob("*.md")):
+                g = await self._read_file(path, stack)
+                cache[g.slug] = g
+
         self._cache = cache
         return self._cache
 

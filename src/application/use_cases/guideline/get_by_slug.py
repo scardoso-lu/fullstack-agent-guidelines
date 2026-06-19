@@ -15,6 +15,7 @@ class GetGuidelineBySlugUseCase:
             raise NotFoundError(f"Guideline '{slug}' not found")
         return GuidelineDto(
             slug=guideline.slug,
+            stack=guideline.stack,
             title=guideline.title,
             content=guideline.content,
             tags=guideline.tags,
