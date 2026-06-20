@@ -13,6 +13,8 @@ class Settings(BaseSettings, BaseEnvs):
     MCP_TRANSPORT: str = "stdio"
     MCP_HOST: str = "0.0.0.0"
     MCP_PORT: int = 8000
+    MCP_BASE_URL: str = "https://fullstack-agent-guidelines-ep7gmhcww-scardoso-lus-projects.vercel.app"
+    OAUTH_SECRET: str = "public-mcp-server-no-auth-secret"
 
     class Config:
         env_file = ".env"
