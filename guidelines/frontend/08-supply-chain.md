@@ -1,5 +1,7 @@
 # Supply Chain Security — Next.js and npm
 
+Use when adding a new npm package, setting up CI, or configuring Docker. Covers exact version pinning, save-exact=true, npm audit in CI, SHA-pinned GitHub Actions, Dependabot config, and SRI for CDN assets.
+
 Every package you install is a piece of someone else's code running with full access to your application and your users' browsers. Supply chain attacks compromise trusted packages to inject malicious code — the xz utils backdoor, event-stream, and hundreds of typosquatted npm packages follow this pattern.
 
 This is OWASP A03:2025 applied to the JavaScript ecosystem.

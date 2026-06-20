@@ -1,5 +1,7 @@
 # Database Design: OLTP and Normalization
 
+Use when designing a database schema, adding a new table, or writing a migration. Covers OLTP normalization, foreign key constraints, indexing strategy, and common schema mistakes that cause N+1 queries.
+
 A SaaS backend lives and dies by its database schema. A poorly designed schema causes data inconsistencies, painful migrations, and N+1 queries that kill performance at scale. Normalization is the discipline that prevents these problems.
 
 OLTP (Online Transaction Processing) workloads — the kind every SaaS app runs — are characterized by many small reads and writes. They demand schemas optimized for correctness and write speed, not for flat reports.

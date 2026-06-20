@@ -1,5 +1,7 @@
 # Server vs Client Components
 
+Use when deciding whether a component needs "use client". Covers the default-Server-Component model, when each type is appropriate, and the Server→Client composition pattern for interactive sub-components.
+
 The biggest mental shift in Next.js 15 App Router is the default: **every component is a Server Component** unless you opt into the client. This is the opposite of the old Pages Router. Getting this wrong is the single most common vibecoding mistake — AI defaults to `"use client"` everywhere, defeating the entire performance model.
 
 ## The Mental Model

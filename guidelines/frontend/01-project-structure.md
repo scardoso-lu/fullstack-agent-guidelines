@@ -1,5 +1,7 @@
 # Frontend Project Structure — Next.js 15 App Router
 
+Use when deciding where a new file belongs in a Next.js 15 App Router project. Covers the directory tree, route groups, the [lang] segment, and placement rules for components, hooks, services, and context.
+
 Understanding the folder structure prevents the most common AI mistake: dumping everything in one place. Every file has an exact home; put it anywhere else and the codebase becomes unmaintainable within weeks.
 
 ## Directory Tree

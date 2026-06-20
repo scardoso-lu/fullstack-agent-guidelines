@@ -1,5 +1,7 @@
 # SOLID Principles in Python — Concrete Examples
 
+Use when designing a new class, interface, or module. Maps each SOLID letter to a concrete pattern: one-file-per-use-case (S), add-new-file-not-edit-existing (O), swap-any-impl (L), interface-per-aggregate (I), inject-via-contract (D).
+
 SOLID is a set of five design principles that make code easier to maintain, extend, and test. Each principle maps directly to patterns used throughout this codebase.
 
 ## S — Single Responsibility Principle

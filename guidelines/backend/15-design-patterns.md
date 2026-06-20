@@ -1,5 +1,7 @@
 # Design Patterns for SaaS Backends
 
+Use when designing a service, adapter, or cross-cutting infrastructure component. Covers Singleton (lru_cache), Factory Method, Repository, Strategy, Observer, and Command patterns with FastAPI/SQLAlchemy examples.
+
 Design patterns are proven solutions to recurring problems. Instead of inventing logic from scratch every time, you apply a named, tested structure. The result is code that other developers (and AI agents) can recognize, extend, and debug without reading every line.
 
 This guide covers the patterns most relevant to Python SaaS backends, with concrete FastAPI/SQLAlchemy examples.

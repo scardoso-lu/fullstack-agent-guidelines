@@ -1,5 +1,7 @@
 # Recognizing and Managing Technical Debt
 
+Use when a codebase is drifting — fat routes, hardcoded values, logic leaking into repositories, or N+1 queries. Covers each code smell with its refactoring strategy and when NOT to refactor.
+
 Technical debt is code that works today but makes tomorrow harder. It's unavoidable in fast development — what matters is recognizing it early and paying it down deliberately.
 
 ## Warning Signs

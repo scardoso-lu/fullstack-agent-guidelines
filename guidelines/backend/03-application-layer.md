@@ -1,5 +1,7 @@
 # Application Layer: Use Cases and DTOs
 
+Use when writing a use case or DTO. Covers one-file-one-operation structure, constructor injection, BaseSchema config, input validation in execute(), and the rule that use cases always return DTOs, never ORM entities.
+
 The application layer orchestrates the domain and infrastructure layers to fulfill a single business operation. It is the home of business logic — not the routes, not the repositories.
 
 ## One Use Case = One File = One Operation

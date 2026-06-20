@@ -2,6 +2,8 @@
 
 > "The best code is the code you never wrote."
 
+Use when reworking a feature or asked to simplify over-built code. Covers the six-rung decision ladder, the ponytail: comment convention, and anti-patterns for backwards-compatibility accumulation.
+
 AI agents over-build. Given a task, they install dependencies, create wrapper classes, add configuration layers, and preserve old implementations "for safety." The result is 5× more code than necessary, slower execution, and a codebase the user can no longer navigate.
 
 This guideline addresses two failure modes that compound each other:

@@ -1,5 +1,7 @@
 # Async Python Patterns
 
+Use when writing async code or debugging event loop issues. Covers the concurrency model, asynccontextmanager session lifecycle, flush vs commit, aiofiles for filesystem I/O, and lru_cache on sync factories.
+
 Python's `async/await` syntax enables concurrent I/O without threads. Understanding the event loop model prevents subtle bugs and performance problems.
 
 ## The Mental Model

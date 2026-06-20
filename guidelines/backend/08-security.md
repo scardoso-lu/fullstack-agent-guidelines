@@ -1,5 +1,7 @@
 # Security Patterns: JWT, Passwords, and Secrets
 
+Use when handling passwords, tokens, or environment secrets. Covers bcrypt hashing in entity setters, HS256 JWT generation and validation, pydantic-settings with no-default secrets, and the OAuth2 Bearer dependency pattern.
+
 Security mistakes are the most expensive technical debt. This guide covers the patterns used in mdip-backend for authentication, authorization, and secret management.
 
 ## Rule 1 — Never Commit Secrets

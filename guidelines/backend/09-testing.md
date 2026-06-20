@@ -1,5 +1,7 @@
 # Testing Strategy: pytest-asyncio and Unit Isolation
 
+Use when writing tests for use cases or routes. Covers pytest-asyncio setup, AsyncMock for repositories, the _mock() entity factory, Arrange/Act/Assert structure, and AsyncClient for route integration tests.
+
 Good tests prove that business rules work — not that Python syntax is correct. Every test should be readable as a specification of behavior.
 
 ## Test Philosophy

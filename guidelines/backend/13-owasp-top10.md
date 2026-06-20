@@ -1,5 +1,7 @@
 # OWASP Top 10 2025 — FastAPI Edition
 
+Use when implementing or reviewing auth, authorization, input handling, or error responses. Maps all ten OWASP Top 10 2025 risks to FastAPI/Python patterns with vulnerable and fixed code for each entry.
+
 The OWASP Top 10 is the industry-standard list of the most critical web application security risks. This guide uses the **2025 edition** — the ordering and categories changed significantly from 2021. Every SaaS backend will be attacked. Building defenses in from day one costs nothing; fixing a breach costs everything.
 
 Each entry maps the vulnerability to a concrete FastAPI/Python pattern with the vulnerable code and the fix.

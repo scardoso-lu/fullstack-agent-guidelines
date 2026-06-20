@@ -1,5 +1,7 @@
 # SOLID, DRY, KISS, and YAGNI — Applied to Next.js
 
+Use when designing a component, hook, or Zod schema. Frontend-specific SOLID/DRY/KISS/YAGNI: one-concern-per-component (S), composition over prop-drilling (O), schema-first Zod for DRY, and YAGNI on hooks.
+
 These principles were coined for OOP but apply directly to React/Next.js. The primitives change (components and hooks instead of classes), but the intent is identical: small, focused units with clear responsibilities that are easy to change.
 
 ---

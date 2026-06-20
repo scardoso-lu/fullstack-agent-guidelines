@@ -2,6 +2,8 @@
 
 > "The best code is the code you never wrote."
 
+Use when reworking a component, hook, or service. Covers the decision ladder, ponytail: comment convention, and anti-patterns — deprecated props, v2 components, stale React Query keys, optional Zod fields.
+
 AI agents over-build. Given a task, they install packages, create wrapper components, add compatibility layers, and preserve old implementations "for safety." The result is 5× more code than necessary, slower builds, and a component tree the user can no longer navigate.
 
 This guideline addresses two failure modes that compound each other:

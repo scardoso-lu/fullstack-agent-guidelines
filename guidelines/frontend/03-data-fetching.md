@@ -1,5 +1,7 @@
 # Data Fetching — Services, React Query, and Server Components
 
+Use when fetching data in a page or component. Covers the service layer (only services call fetch()), Server Component direct-await, React Query for client state, and why useEffect is the wrong tool for data fetching.
+
 Every data fetch in the app goes through one of two paths: a **Server Component** fetching directly via a service function, or a **Client Component** fetching through React Query. Raw `fetch()` calls in components are never acceptable — they bypass error handling, type safety, and the shared auth layer.
 
 ---

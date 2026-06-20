@@ -1,5 +1,7 @@
 # Forms and Validation — React Hook Form + Zod
 
+Use when building a form. Covers the Zod schema → TypeScript type → zodResolver pattern, mapping server errors back to fields, cross-field validation with .refine(), and root-level error display for non-field API errors.
+
 Every form in the application uses **React Hook Form** for state management and **Zod** for schema validation. This combination is type-safe end-to-end: the Zod schema infers the TypeScript type, the resolver connects them to the form, and invalid data never reaches the submit handler.
 
 ---

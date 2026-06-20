@@ -1,5 +1,7 @@
 # Domain Layer: Entities and Value Objects
 
+Use when creating or modifying a domain entity or value object. Covers SQLAlchemy ORM entities, frozen dataclass value objects, password hashing in setters, Snowflake IDs, and the _mock() factory pattern for tests.
+
 The domain layer is the heart of the application. It contains the business objects and rules that exist independently of any framework, database, or API. If you delete FastAPI and SQLAlchemy, the domain still makes sense.
 
 ## What Belongs Here

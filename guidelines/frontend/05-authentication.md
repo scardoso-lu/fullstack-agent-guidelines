@@ -1,5 +1,7 @@
 # Authentication — JWT, Cookies, and Route Protection
 
+Use when implementing login, protecting routes, or reading the current user. Covers JWT cookie setup, Edge middleware route guard, AuthProvider with useUser hook, and the /api/me pattern for HttpOnly cookies.
+
 The app uses JWT access tokens stored in a cookie (`x-access-token`). Authentication flows through three layers: middleware (Edge, catches everything), `UserContext` (client-side user state), and individual pages/components (consume the context or redirect).
 
 ---

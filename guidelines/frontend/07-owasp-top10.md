@@ -1,5 +1,7 @@
 # OWASP Top 10 2025 — Next.js and Web Application Edition
 
+Use when implementing auth, rendering user-provided content, or configuring security headers. Maps all ten OWASP Top 10 2025 risks to Next.js patterns — middleware access control, CSP, XSS via DOMPurify, and NEXT_PUBLIC_ rules.
+
 The same OWASP Top 10 2025 that governs your FastAPI backend applies to the frontend — but the attack surfaces and fixes are different. A secure backend is not enough if the frontend leaks tokens, renders arbitrary HTML, or ships secrets in the client bundle.
 
 Each entry maps the 2025 risk to a concrete Next.js pattern.

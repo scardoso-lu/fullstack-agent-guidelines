@@ -1,5 +1,7 @@
 # State Management — React Query, Context, URL State, and Local State
 
+Use when choosing where to store a piece of state. Covers the four buckets — React Query (server state), Context (global UI), URL params via nuqs (shareable state), useState (local) — and the rule for when each applies.
+
 State in a Next.js App Router app falls into four buckets. Choosing the wrong one causes cache invalidation bugs, unnecessary re-renders, or state that gets lost on navigation. Match the bucket to the kind of state.
 
 ---

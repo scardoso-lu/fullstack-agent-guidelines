@@ -1,5 +1,7 @@
 # Presentation Layer: FastAPI Routes
 
+Use when writing a FastAPI route or MCP tool handler. Covers the thin-layer rule (≤10 lines), response_model enforcement, Depends() injection, domain-error-to-HTTP mapping, and correct status codes.
+
 The presentation layer is the thinnest layer. It translates between HTTP and the application layer. It contains zero business logic — only wiring.
 
 ## The Thin Layer Rule

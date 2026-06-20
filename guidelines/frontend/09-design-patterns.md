@@ -1,5 +1,7 @@
 # Design Patterns for Next.js
 
+Use when building a multi-part UI, sharing state across siblings, or wrapping a third-party SDK. Covers Compound Components, Container/Presenter, custom hooks as Strategy, Server Actions as Command, and the Adapter pattern.
+
 Design patterns for React/Next.js are different from backend OOP patterns. The primitives are components, hooks, and context — not classes and interfaces. These patterns solve recurring composition problems.
 
 ---

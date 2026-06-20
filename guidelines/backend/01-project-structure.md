@@ -1,5 +1,7 @@
 # Project Structure and Layer Conventions
 
+Use when deciding where to put a new file or module. Defines the four-layer rule, the exact directory tree, naming conventions, and a file placement decision guide for every type of Python file.
+
 Understanding how to organize a backend project is the first step to writing maintainable code. Without structure, codebases become tangled webs where changing one thing breaks three others.
 
 ## Overview of the Four Layers
