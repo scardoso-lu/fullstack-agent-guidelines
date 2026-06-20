@@ -30,7 +30,3 @@ class SearchResultDto(BaseSchema):
     stack_filter: str | None = None
 
 
-class RecommendationResultDto(BaseSchema):
-    items: list[GuidelineSummaryDto]
-    task: str
-    total: int

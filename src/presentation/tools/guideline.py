@@ -3,7 +3,6 @@ from mcp.server.fastmcp import FastMCP
 from src.application.use_cases.guideline.get_all_context import GetAllContextUseCase
 from src.application.use_cases.guideline.get_by_slug import GetGuidelineBySlugUseCase
 from src.application.use_cases.guideline.list_all import ListGuidelinesUseCase
-from src.application.use_cases.guideline.recommend import RecommendGuidelinesUseCase
 from src.application.use_cases.guideline.search import SearchGuidelinesUseCase
 from src.infrastructure.repositories.guideline_repository import get_guideline_repository
 from src.utils.exc import NotFoundError
@@ -54,23 +53,6 @@ def register_guideline_tools(mcp: FastMCP) -> None:
         try:
             use_case = SearchGuidelinesUseCase(get_guideline_repository())
             result = await use_case.execute(query, stack)
-            return result.model_dump()
-        except ValueError as exc:
-            return {"error": str(exc)}
-
-    @mcp.tool(
-        name="recommend_guidelines",
-        description=(
-            "Given a description of what you are about to implement or change, returns the "
-            "most relevant guideline slugs and summaries ranked by relevance. "
-            "Pass stack='backend' or stack='frontend' to restrict results. "
-            "Call get_guideline on any returned slug to read the full content."
-        ),
-    )
-    async def recommend_guidelines(task: str, stack: str | None = None) -> dict:
-        try:
-            use_case = RecommendGuidelinesUseCase(get_guideline_repository())
-            result = await use_case.execute(task, stack)
             return result.model_dump()
         except ValueError as exc:
             return {"error": str(exc)}
