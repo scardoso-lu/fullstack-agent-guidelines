@@ -8,6 +8,9 @@ import aiofiles
 
 from src.domain.entities.example import Example
 from src.infrastructure.repositories.contract import ExampleRepositoryInterface
+from src.utils.logger import get_logger
+
+_logger = get_logger("repo.example")
 
 _BACKEND_LAYERS = ("domain", "application", "infrastructure", "presentation")
 _FRONTEND_GLOBS = ("*.ts", "*.tsx")
@@ -18,6 +21,7 @@ class ExampleRepository(ExampleRepositoryInterface):
     def __init__(self, examples_dir: Path) -> None:
         self._dir = examples_dir
         self._cache: list[Example] | None = None
+        _logger.info("ExampleRepository init dir=%s", examples_dir)
 
     @staticmethod
     def _parse_description(content: str) -> str:
@@ -26,8 +30,10 @@ class ExampleRepository(ExampleRepositoryInterface):
 
     async def _load_all(self) -> list[Example]:
         if self._cache is not None:
+            _logger.debug("cache hit — returning %d examples", len(self._cache))
             return self._cache
 
+        _logger.info("cache miss — loading examples from %s", self._dir)
         examples: list[Example] = []
         base = Path(self._dir)
 
@@ -37,8 +43,10 @@ class ExampleRepository(ExampleRepositoryInterface):
             for layer in _BACKEND_LAYERS:
                 layer_dir = backend_dir / layer
                 if not layer_dir.is_dir():
+                    _logger.debug("layer dir not found layer=%s path=%s", layer, layer_dir)
                     continue
                 for path in sorted(layer_dir.glob("*.py")):
+                    _logger.debug("loading example path=%s", path)
                     async with aiofiles.open(path, encoding="utf-8") as f:
                         content = await f.read()
                     examples.append(
@@ -59,6 +67,7 @@ class ExampleRepository(ExampleRepositoryInterface):
                 p for glob in _FRONTEND_GLOBS for p in frontend_dir.glob(glob)
             )
             for path in paths:
+                _logger.debug("loading example path=%s", path)
                 async with aiofiles.open(path, encoding="utf-8") as f:
                     content = await f.read()
                 examples.append(
@@ -73,6 +82,7 @@ class ExampleRepository(ExampleRepositoryInterface):
                 )
 
         self._cache = examples
+        _logger.info("examples loaded total=%d", len(self._cache))
         return self._cache
 
     async def get_all(self) -> list[Example]:
