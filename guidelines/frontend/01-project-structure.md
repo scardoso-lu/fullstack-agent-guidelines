@@ -23,7 +23,7 @@ src/
 │       │           └── page.tsx
 │       └── (public)/         ← Route group: landing, marketing pages
 ├── components/
-│   ├── ui/                   ← Headless, reusable UI primitives (shadcn/ui) — no business logic
+│   ├── ui/                   ← Base UI wrappers using daisyUI classes — no business logic
 │   ├── app/                  ← Feature-specific components tied to a domain
 │   └── <feature>/            ← Components scoped to one section (landing, tree-view…)
 ├── lib/

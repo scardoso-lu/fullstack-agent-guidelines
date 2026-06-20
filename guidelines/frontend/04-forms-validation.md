@@ -69,35 +69,50 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-      <div>
+      <div className="form-control">
+        <label className="label" htmlFor="email">
+          <span className="label-text">Email</span>
+        </label>
         <input
+          id="email"
           {...register("email")}
           type="email"
-          placeholder="Email"
-          className="input"
+          placeholder="you@example.com"
+          className={`input input-bordered w-full ${errors.email ? "input-error" : ""}`}
         />
         {errors.email && (
-          <p className="text-sm text-red-500">{errors.email.message}</p>
+          <label className="label">
+            <span className="label-text-alt text-error">{errors.email.message}</span>
+          </label>
         )}
       </div>
 
-      <div>
+      <div className="form-control">
+        <label className="label" htmlFor="password">
+          <span className="label-text">Password</span>
+        </label>
         <input
+          id="password"
           {...register("password")}
           type="password"
-          placeholder="Password"
+          placeholder="••••••••"
+          className={`input input-bordered w-full ${errors.password ? "input-error" : ""}`}
         />
         {errors.password && (
-          <p className="text-sm text-red-500">{errors.password.message}</p>
+          <label className="label">
+            <span className="label-text-alt text-error">{errors.password.message}</span>
+          </label>
         )}
       </div>
 
       {errors.root && (
-        <p className="text-sm text-red-500">{errors.root.message}</p>
+        <div className="alert alert-error text-sm">{errors.root.message}</div>
       )}
 
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Signing in…" : "Sign in"}
+      <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+        {isSubmitting ? (
+          <><span className="loading loading-spinner loading-sm" />Signing in…</>
+        ) : "Sign in"}
       </button>
     </form>
   );
@@ -143,59 +158,119 @@ const ChangePasswordSchema = z
 
 ---
 
-## shadcn/ui Form Components
+## daisyUI Form Components
 
-When using shadcn/ui's `<Form>` components, the integration is slightly different:
+daisyUI is a Tailwind CSS plugin — there are no React component imports. Apply daisyUI class names directly on native HTML elements alongside `{...register(...)}`. No `npx shadcn add`, no copied component files.
+
+### Installation
+
+```bash
+npm install daisyui
+```
+
+```ts
+// tailwind.config.ts
+import type { Config } from "tailwindcss";
+import daisyui from "daisyui";
+
+const config: Config = {
+  content: ["./src/**/*.{ts,tsx}"],
+  plugins: [daisyui],
+  daisyui: {
+    themes: ["light", "dark"],
+    logs: false,
+  },
+};
+
+export default config;
+```
+
+### Field Pattern
 
 ```tsx
 "use client";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 
 export function DrugForm({ onSuccess }: { onSuccess: () => void }) {
-  const form = useForm<DrugFormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<DrugFormData>({
     resolver: zodResolver(DrugSchema),
     defaultValues: { inn: "", atc_code: "", form: "" },
   });
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="inn"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>INN</FormLabel>
-              <FormControl>
-                <Input placeholder="Paracetamol" {...field} />
-              </FormControl>
-              <FormMessage />  {/* renders errors.inn.message automatically */}
-            </FormItem>
-          )}
-        />
+    <form onSubmit={handleSubmit(onSuccess)} className="flex flex-col gap-4">
 
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Saving…" : "Save"}
-        </Button>
-      </form>
-    </Form>
+      <div className="form-control">
+        <label className="label" htmlFor="inn">
+          <span className="label-text">INN</span>
+        </label>
+        <input
+          id="inn"
+          type="text"
+          placeholder="Paracetamol"
+          className={`input input-bordered w-full ${errors.inn ? "input-error" : ""}`}
+          {...register("inn")}
+        />
+        {errors.inn && (
+          <label className="label">
+            <span className="label-text-alt text-error">{errors.inn.message}</span>
+          </label>
+        )}
+      </div>
+
+      <div className="form-control">
+        <label className="label" htmlFor="atc_code">
+          <span className="label-text">ATC Code</span>
+        </label>
+        <input
+          id="atc_code"
+          type="text"
+          placeholder="N02BE01"
+          className={`input input-bordered w-full ${errors.atc_code ? "input-error" : ""}`}
+          {...register("atc_code")}
+        />
+        {errors.atc_code && (
+          <label className="label">
+            <span className="label-text-alt text-error">{errors.atc_code.message}</span>
+          </label>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        className="btn btn-primary"
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? (
+          <><span className="loading loading-spinner loading-sm" />Saving…</>
+        ) : "Save"}
+      </button>
+
+    </form>
   );
 }
 ```
 
-`<FormMessage />` reads from `formState.errors[name]` automatically — no manual `{errors.inn && <p>...}` needed.
+### daisyUI Class Reference for Forms
+
+| Element | Classes |
+|---|---|
+| Field wrapper | `form-control` |
+| Label row | `label` + `label-text` |
+| Text input | `input input-bordered w-full` |
+| Input with error | add `input-error` |
+| Textarea | `textarea textarea-bordered w-full` |
+| Select | `select select-bordered w-full` |
+| Error message | `label` + `label-text-alt text-error` |
+| Root/API error | `alert alert-error` |
+| Submit button | `btn btn-primary` |
+| Loading spinner | `loading loading-spinner loading-sm` |
 
 ---
 
@@ -282,5 +357,6 @@ This approach scales to 50+ lines for a 3-field form. Every field needs its own 
 - [ ] `zodResolver(Schema)` is passed to `useForm({ resolver: ... })`
 - [ ] API errors are attached via `setError("root", { message: ... })` and rendered as `{errors.root?.message}`
 - [ ] `isSubmitting` or `isPending` disables the submit button and shows a loading label
-- [ ] shadcn/ui `<FormMessage />` is used inside `<FormField>` — no manual error rendering
+- [ ] `input-error` class applied to the input when `errors.fieldName` is set
+- [ ] Error messages use `label-text-alt text-error` inside a second `<label className="label">` — daisyUI standard placement
 - [ ] No `useState` + manual validation logic — let Zod handle it
