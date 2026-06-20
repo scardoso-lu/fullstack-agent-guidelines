@@ -27,11 +27,3 @@ mcp = create_mcp_server()
 if __name__ == "__main__":
     config = get_config()
     mcp.run(transport=config.MCP_TRANSPORT)
-
-
-
-mcp = create_mcp_server()
-
-if __name__ == "__main__":
-    config = get_config()
-    mcp.run(transport=config.MCP_TRANSPORT)
