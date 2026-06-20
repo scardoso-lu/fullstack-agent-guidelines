@@ -1,14 +1,13 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "includeFiles": ["guidelines/**", "examples/**", "src/**"]
-      }
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python",
+      "maxDuration": 800,
+      "fluid": true,
+      "includeFiles": ["guidelines/**", "examples/**", "src/**"]
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
