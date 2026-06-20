@@ -94,6 +94,11 @@ async def oauth_authorization_server(request: Request) -> JSONResponse:
     return JSONResponse(
         {
             "issuer": _base_url,
+            # authorization_endpoint and token_endpoint are required by RFC 8414
+            # and validated by MCP SDK clients even when grant_types_supported is
+            # empty (meaning no actual OAuth flow is performed).
+            "authorization_endpoint": f"{_base_url}/oauth/authorize",
+            "token_endpoint": f"{_base_url}/oauth/token",
             "registration_endpoint": f"{_base_url}/register",
             "response_types_supported": [],
             "grant_types_supported": [],
