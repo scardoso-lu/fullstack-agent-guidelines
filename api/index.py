@@ -2,7 +2,6 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Callable
 
 # Ensure repo root is on sys.path when running from the api/ subdirectory
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -78,6 +77,24 @@ class RequestLoggingMiddleware:
             log_fn("response method=%s path=%s status=%d duration_ms=%.1f auth=%s", method, path, status_code, elapsed, auth_log)
 
 
+async def oauth_register(request: Request) -> JSONResponse:
+    """
+    RFC 7591 Dynamic Client Registration stub.
+    Returns a public client registration so MCP clients that attempt
+    dynamic registration don't stall on a 404 and fall back to sending
+    bad tokens (which would produce 401s on subsequent requests).
+    """
+    return JSONResponse(
+        {
+            "client_id": "public",
+            "client_id_issued_at": int(time.time()),
+            "token_endpoint_auth_method": "none",
+        },
+        status_code=201,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 async def oauth_protected_resource(request: Request) -> JSONResponse:
     """
     RFC 9728 OAuth 2.0 Protected Resource Metadata.
@@ -108,6 +125,7 @@ _starlette = Starlette(
     routes=[
         Route("/.well-known/oauth-protected-resource", oauth_protected_resource),
         Route("/.well-known/oauth-protected-resource/mcp", oauth_protected_resource),
+        Route("/register", oauth_register, methods=["POST"]),
         Mount("/", app=mcp.streamable_http_app()),
     ],
 )
