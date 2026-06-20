@@ -7,4 +7,5 @@ test/
 htmlcov/
 coverage.xml
 poetry.lock
+pyproject.toml
 Dockerfile
