@@ -1,25 +1,25 @@
 import os
 from functools import lru_cache
+from typing import Literal
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.config.settings.base import BaseEnvs, EnvType, _REPO_ROOT
+from src.config.settings.base import EnvType, _REPO_ROOT
 
 
-class Settings(BaseSettings, BaseEnvs):
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     ENVIRONMENT: EnvType = "PROD"
     GUIDELINES_DIR: str = str(_REPO_ROOT / "guidelines")
     EXAMPLES_DIR: str = str(_REPO_ROOT / "examples")
-    MCP_TRANSPORT: str = "stdio"
+    MCP_TRANSPORT: Literal["stdio", "sse"] = "stdio"
     MCP_HOST: str = "0.0.0.0"
     MCP_PORT: int = 8000
-    MCP_BASE_URL: str = "https://fullstack-agent-guidelines-ep7gmhcww-scardoso-lus-projects.vercel.app"
-    OAUTH_SECRET: str = "public-mcp-server-no-auth-secret"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
 
 
 class TestSettings(Settings):
