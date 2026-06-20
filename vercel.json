@@ -5,7 +5,7 @@
     "api/index.py": {
       "runtime": "@vercel/python",
       "maxDuration": 800,
-      "includeFiles": ["guidelines/**", "examples/**", "src/**"]
+      "includeFiles": "guidelines/**|examples/**|src/**"
     }
   },
   "routes": [
