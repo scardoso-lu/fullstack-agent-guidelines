@@ -1,17 +1,42 @@
-// Description: Server Component — async data fetch, no client JS, no loading state
+// Description: Server Component — async data fetch, no client JS, server-side auth cookie
 // ─────────────────────────────────────────────────────────────────────────────
 // PATTERN: Server Components are async functions. They await service calls
 // directly. The page arrives fully rendered — no loading spinner, no
 // useEffect, no client-side fetch.
+//
+// Auth: cookies() from next/headers reads the HttpOnly cookie server-side
+// and forwards it to the backend. The client never sees the token value.
 // ─────────────────────────────────────────────────────────────────────────────
 // File location: app/[lang]/(private)/admin/drugs/page.tsx
 // NO "use client" directive — this runs on the server only.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { cookies } from "next/headers";
 import { Suspense } from "react";
-import { DrugService, type DrugDataItem, type PaginationResponse } from "@/services/drugs";
-import { DrugTable } from "@/components/app/drug-table";   // can be Server or Client Component
-import { DrugSearchClient } from "@/components/app/drug-search-client";  // Client Component
+import type { DrugDataItem, PaginationResponse } from "@/services/drugs";
+import { DrugTable } from "@/components/app/drug-table";
+import { DrugSearchClient } from "@/components/app/drug-search-client";
+
+// ── Server-side fetch helper ──────────────────────────────────────────────────
+// Reads the HttpOnly cookie server-side and forwards it to the backend.
+// Cannot use the client-side authApi here (it references window.location).
+
+async function serverFetch<T>(path: string): Promise<T> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("x-access-token")?.value;
+
+  const res = await fetch(`${process.env.API_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      // Forward cookie as Authorization — backend accepts either form
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: "no-store",   // always fresh for authenticated data
+  });
+
+  if (!res.ok) throw new Error(`API ${res.status} for ${path}`);
+  return res.json() as Promise<T>;
+}
 
 // ── Page (Server Component) ───────────────────────────────────────────────────
 
@@ -22,11 +47,12 @@ type PageProps = {
 };
 
 export default async function DrugsPage({ params, searchParams }: PageProps) {
-  const page = parseInt(searchParams.page ?? "1", 10);
+  const page = Math.max(1, parseInt(searchParams.page ?? "1", 10));
   const query = searchParams.q ?? "";
 
-  // Direct service call — runs on server, not in the browser bundle
-  const drugs = await DrugService.paged(page, 20, query);
+  const drugs = await serverFetch<PaginationResponse<DrugDataItem>>(
+    `/drugs?page=${page}&size=20${query ? `&q=${encodeURIComponent(query)}` : ""}`
+  );
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -61,7 +87,7 @@ export function StatsCard({ label, value }: StatsCardProps) {
   );
 }
 
-// ── Pagination — Server Component with a link (no JS needed) ─────────────────
+// ── Pagination — Server Component with links (no JS needed) ──────────────────
 
 type PaginationProps = {
   current: number;
@@ -93,16 +119,27 @@ function Pagination({ current, total, size }: PaginationProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ANTI-PATTERN — never convert a page to "use client" just to fetch:
+// ANTI-PATTERNS:
+//
+// 1. "use client" on a page just to fetch data:
 //
 //   "use client"
 //   export default function DrugsPage() {
 //     const [drugs, setDrugs] = useState([]);
 //     useEffect(() => { DrugService.paged(1,20).then(r => setDrugs(r.data)); }, []);
-//     if (!drugs.length) return <Spinner />;
+//     if (!drugs.length) return <Spinner />;   // ← flash of empty state
 //     ...
 //   }
+//   → Adds React state machinery to a page that only needs to display data.
+//     Use a Server Component and await the service call directly.
 //
-// This adds the entire React state machinery to a page that only needs
-// to display data. Use a Server Component and await the service call.
+// 2. Hardcoding auth token in server fetch:
+//
+//   headers: { Authorization: "Bearer hardcoded-token" }  ← exposes secret
+//   → Always read the token from cookies() or environment variables.
+//
+// 3. Using client-side authApi in a Server Component:
+//
+//   const drugs = await authApi(...)   ← authApi references window.location (browser only)
+//   → Use serverFetch() in Server Components; authApi() in Client Components.
 // ─────────────────────────────────────────────────────────────────────────────

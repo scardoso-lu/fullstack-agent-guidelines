@@ -35,14 +35,25 @@ class Email:
 class Guideline:
     """Read-only domain object loaded from a markdown file. No DB mapping needed."""
 
-    slug: str
+    slug: str       # "backend/01-project-structure" | "frontend/01-project-structure"
+    stack: str      # "backend" | "frontend"
     title: str
     content: str
     tags: list[str] = field(default_factory=list)
 
     @staticmethod
-    def _mock(slug: str = "01-test", title: str = "Test") -> "Guideline":
-        return Guideline(slug=slug, title=title, content=f"# {title}\n\nTest content.", tags=["test"])
+    def _mock(
+        slug: str = "backend/01-test",
+        stack: str = "backend",
+        title: str = "Test Guideline",
+    ) -> "Guideline":
+        return Guideline(
+            slug=slug,
+            stack=stack,
+            title=title,
+            content=f"# {title}\n\nTest content.",
+            tags=["test"],
+        )
 
 
 # =============================================================================
@@ -55,3 +66,10 @@ class EmailBad:
 
 # Passing raw dicts instead of value objects loses type safety:
 # create_user({"email": "bad"})  ← what fields? is it validated?
+
+# Mutable guideline — enables accidental mutation of shared domain state:
+class GuidelineBad:
+    def __init__(self, slug, title, content):
+        self.slug = slug
+        self.title = title
+        self.content = content     # caller can mutate .content at any time

@@ -2,9 +2,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PATTERN: src/services/ is the ONLY place that calls fetch().
 // Components and pages receive typed data — they never see raw Response or fetch().
+//
+// Auth model: JWT is stored in an HttpOnly SameSite=Strict cookie.
+// The browser sends it automatically — no JS reads the cookie value.
+// credentials: "include" ensures it is forwarded on every same-origin request.
 // ─────────────────────────────────────────────────────────────────────────────
-
-import Cookies from "js-cookie";
 
 // ── Generic response types ────────────────────────────────────────────────────
 
@@ -32,26 +34,24 @@ export class ApiError extends Error {
 
 // ── Base fetch wrappers ───────────────────────────────────────────────────────
 
-// authApi — attaches Bearer token from cookie; throws ApiError on non-2xx
+// authApi — credentials:"include" forwards the HttpOnly SameSite=Strict cookie.
+// The backend authenticates from the cookie; no Authorization header is needed.
 export async function authApi<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<TypedResponse<T>> {
-  const token = Cookies.get("x-access-token");
-
   const response = await fetch(url, {
+    credentials: "include",   // sends HttpOnly cookie automatically — JS never reads it
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   }) as TypedResponse<T>;
 
   if (!response.ok) {
-    // Global 401 handler — session expired mid-use
     if (response.status === 401) {
-      Cookies.remove("x-access-token");
+      // Cookie is HttpOnly — cannot clear it from JS. Redirect; server clears on login.
       window.location.href = "/en/login";
       throw new ApiError(401, "Session expired");
     }
@@ -134,12 +134,23 @@ export const DrugService = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ANTI-PATTERN — never do this in a component:
+// ANTI-PATTERNS:
+//
+// 1. Reading the token from JS to attach it manually:
+//
+//   import Cookies from "js-cookie";
+//   const token = Cookies.get("x-access-token");    // ← requires non-HttpOnly cookie
+//   headers: { Authorization: `Bearer ${token}` }   // ← exposes token to XSS
+//
+//   Use credentials:"include" instead — the browser forwards the cookie and JS
+//   never touches the token value.
+//
+// 2. Raw fetch inside a component:
 //
 //   const [drugs, setDrugs] = useState([]);
 //   useEffect(() => {
 //     fetch("/api/drugs").then(r => r.json()).then(setDrugs);  // ← raw fetch, no types
 //   }, []);
 //
-// Put the fetch in a service. Use React Query in the component.
+//   Put the fetch in a service. Use React Query in the component.
 // ─────────────────────────────────────────────────────────────────────────────
