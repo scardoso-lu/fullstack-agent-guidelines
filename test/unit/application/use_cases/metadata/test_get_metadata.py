@@ -46,6 +46,27 @@ def test_extract_summary_empty_content_returns_empty():
     assert _extract_summary("") == ""
 
 
+def test_extract_summary_skips_leading_blockquote():
+    content = '# Title\n\n> "The best code is the code you never wrote."\n\nReal first paragraph here.'
+    assert _extract_summary(content) == "Real first paragraph here."
+
+
+def test_extract_summary_skips_blockquote_returns_second_paragraph():
+    content = "# Rework Clean\n\n> Some quote\n\nAI agents over-build. This is the real summary.\n\n## Section"
+    result = _extract_summary(content)
+    assert "AI agents over-build" in result
+    assert ">" not in result
+
+
+def test_extract_summary_strips_inline_markdown():
+    content = "# Title\n\nUse **React Query** for all `server state` fetching."
+    result = _extract_summary(content)
+    assert "**" not in result
+    assert "`" not in result
+    assert "React Query" in result
+    assert "server state" in result
+
+
 # ── Integration: use case ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
