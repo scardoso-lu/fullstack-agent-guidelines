@@ -50,11 +50,19 @@ class RequestLoggingMiddleware:
         client = scope.get("client")
         client_ip = client[0] if client else "unknown"
 
-        raw_headers: dict[bytes, bytes] = {k: v for k, v in scope.get("headers", [])}
-        auth_log = _mask_auth(raw_headers.get(b"authorization", b"").decode())
+        raw_headers: list[tuple[bytes, bytes]] = list(scope.get("headers", []))
+        raw_headers_map = {k: v for k, v in raw_headers}
+        auth_log = _mask_auth(raw_headers_map.get(b"authorization", b"").decode())
+        original_host = raw_headers_map.get(b"host", b"").decode()
 
-        _logger.info("request  method=%s path=%s client=%s auth=%s", method, path, client_ip, auth_log)
-        _logger.debug("request  headers=%s", {k.decode(): v.decode() for k, v in scope.get("headers", [])})
+        _logger.info("request  method=%s path=%s client=%s host=%s auth=%s", method, path, client_ip, original_host, auth_log)
+        _logger.debug("request  headers=%s", {k.decode(): v.decode() for k, v in raw_headers})
+
+        # FastMCP's StreamableHTTPSessionManager only accepts loopback hosts
+        # (DNS-rebinding protection). Rewrite Host to localhost so it passes;
+        # Vercel's edge layer handles real origin security.
+        patched_headers = [(b"host", b"localhost") if k == b"host" else (k, v) for k, v in raw_headers]
+        patched_scope = {**scope, "headers": patched_headers}
 
         status_code: int | None = None
 
@@ -65,7 +73,7 @@ class RequestLoggingMiddleware:
             await send(message)
 
         try:
-            await self._app(scope, receive, send_wrapper)
+            await self._app(patched_scope, receive, send_wrapper)
         except Exception as exc:
             elapsed = (time.monotonic() - start) * 1000
             _logger.error("response method=%s path=%s status=500 duration_ms=%.1f error=%r", method, path, elapsed, exc)
