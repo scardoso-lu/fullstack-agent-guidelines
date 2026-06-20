@@ -11,6 +11,7 @@ def create_mcp_server() -> FastMCP:
 
     server = FastMCP(
         name=C.TITLE,
+        stateless_http=True,
     )
 
     server.settings.host = config.MCP_HOST
