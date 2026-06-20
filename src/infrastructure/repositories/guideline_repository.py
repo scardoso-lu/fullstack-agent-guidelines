@@ -8,7 +8,7 @@ from src.domain.entities.guideline import Guideline
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
 from src.utils.markdown import extract_summary
 
-_VALID_STACKS = ("backend", "frontend")
+_VALID_STACKS = ("backend", "frontend", "infra")
 
 
 class GuidelineRepository(GuidelineRepositoryInterface):

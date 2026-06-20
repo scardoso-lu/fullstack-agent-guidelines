@@ -1,7 +1,7 @@
 from src.application.dto.guideline_dto import GuidelineListDto, GuidelineSummaryDto
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
 
-_VALID_STACKS = {"backend", "frontend"}
+_VALID_STACKS = {"backend", "frontend", "infra"}
 
 
 class ListGuidelinesUseCase:
