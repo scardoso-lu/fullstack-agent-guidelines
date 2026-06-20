@@ -12,10 +12,12 @@ uv replaces pip, virtualenv, and poetry in a single binary. `uv sync --frozen` i
 
 ## Dockerfile
 
+Multi-stage: `base` → `production` (no dev deps) and `base` → `test` (with dev deps). The test stage is used by `docker-compose.test.yml` — see `infra/02-testing-in-docker`.
+
 ```dockerfile
 # syntax=docker/dockerfile:1.7
 
-FROM python:3.13-slim
+FROM python:3.13-slim AS base
 
 # Install uv from the official image — no pip, no curl, no apt dependency
 COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /usr/local/bin/
@@ -26,18 +28,21 @@ WORKDIR /app
 # the install layer when dependencies actually change
 COPY pyproject.toml uv.lock ./
 
-# Install production dependencies exactly from the lockfile — never resolves
+# ── production ────────────────────────────────────────────────────────────────
+FROM base AS production
 RUN uv sync --frozen --no-dev
-
-# Copy source after dependencies — preserves cache on code-only changes
 COPY src/ ./src/
-
-# Non-root user — process must not run as root in production
 RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
-
 EXPOSE 8000
 CMD ["uv", "run", "python", "-m", "src.main"]
+
+# ── test ──────────────────────────────────────────────────────────────────────
+FROM base AS test
+RUN uv sync --frozen          # includes dev deps (pytest, ruff…)
+COPY src/ ./src/
+COPY test/ ./test/
+CMD ["uv", "run", "pytest", "test/", "--tb=short", "-v"]
 ```
 
 ---
@@ -160,13 +165,20 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY src/ ./src/
 
-# ❌ WRONG — running as root in production (no USER instruction)
+# ❌ WRONG — running as root in the production stage (no USER instruction)
 CMD ["uv", "run", "python", "-m", "src.main"]
 
-# ✅ CORRECT — non-root user
+# ✅ CORRECT — non-root user in production stage
 RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 CMD ["uv", "run", "python", "-m", "src.main"]
+
+# ❌ WRONG — single stage; production image ships dev deps and test files
+FROM python:3.13-slim
+RUN uv sync --frozen  # installs pytest, ruff, etc. into production
+
+# ✅ CORRECT — separate test stage; production only gets --no-dev
+# (see infra/02-testing-in-docker for the full multi-stage pattern)
 ```
 
 ---
