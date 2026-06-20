@@ -2,9 +2,10 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.application.dto.metadata_dto import MetadataDto
-from src.application.use_cases.metadata.get_metadata import GetMetadataUseCase, _extract_summary
+from src.application.use_cases.metadata.get_metadata import GetMetadataUseCase
 from src.domain.entities.example import Example
 from src.domain.entities.guideline import Guideline
+from src.utils.markdown import extract_summary as _extract_summary
 
 
 @pytest.fixture
@@ -116,6 +117,7 @@ async def test_get_metadata_includes_summary(mock_guideline_repo, mock_example_r
         title="Alpha",
         content="# Alpha\n\nThis is the summary paragraph.\n\n## Details\n\nMore here.",
         tags=[],
+        summary="This is the summary paragraph.",
     )
     mock_guideline_repo.get_all.return_value = [g]
     mock_example_repo.get_all.return_value = []

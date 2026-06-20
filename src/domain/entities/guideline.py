@@ -8,6 +8,7 @@ class Guideline:
     title: str
     content: str
     tags: list[str] = field(default_factory=list)
+    summary: str = ""
 
     @staticmethod
     def _mock(
@@ -21,4 +22,5 @@ class Guideline:
             title=title,
             content=f"# {title}\n\nMock content for testing.",
             tags=["test"],
+            summary="Mock content for testing.",
         )

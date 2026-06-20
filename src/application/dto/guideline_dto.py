@@ -8,6 +8,7 @@ class GuidelineSummaryDto(BaseSchema):
     stack: str
     title: str
     tags: list[str]
+    summary: str = ""
 
 
 class GuidelineDto(GuidelineSummaryDto):
@@ -25,4 +26,11 @@ class GuidelineListDto(BaseSchema):
 class SearchResultDto(BaseSchema):
     items: list[GuidelineDto]
     query: str
+    total: int
+    stack_filter: str | None = None
+
+
+class RecommendationResultDto(BaseSchema):
+    items: list[GuidelineSummaryDto]
+    task: str
     total: int

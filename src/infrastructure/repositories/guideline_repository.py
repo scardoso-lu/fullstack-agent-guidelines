@@ -6,6 +6,7 @@ import aiofiles
 
 from src.domain.entities.guideline import Guideline
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
+from src.utils.markdown import extract_summary
 
 _VALID_STACKS = ("backend", "frontend")
 
@@ -37,7 +38,8 @@ class GuidelineRepository(GuidelineRepositoryInterface):
         slug = f"{stack}/{path.stem}"
         title = self._parse_title(content) or path.stem
         tags = self._tags_from_slug(slug)
-        return Guideline(slug=slug, stack=stack, title=title, content=content, tags=tags)
+        summary = extract_summary(content)
+        return Guideline(slug=slug, stack=stack, title=title, content=content, tags=tags, summary=summary)
 
     async def _load_all(self) -> dict[str, Guideline]:
         if self._cache is not None:

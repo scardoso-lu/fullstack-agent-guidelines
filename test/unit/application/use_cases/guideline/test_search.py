@@ -52,3 +52,35 @@ async def test_empty_query_raises_value_error(mock_repo):
     with pytest.raises(ValueError, match="Search query cannot be empty"):
         await SearchGuidelinesUseCase(mock_repo).execute("")
     mock_repo.search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_search_filters_by_stack(mock_repo):
+    mock_repo.search.return_value = [
+        Guideline._mock(slug="backend/01-alpha", stack="backend", title="Alpha"),
+        Guideline._mock(slug="frontend/01-alpha", stack="frontend", title="FE Alpha"),
+    ]
+
+    result = await SearchGuidelinesUseCase(mock_repo).execute("alpha", stack="backend")
+
+    assert result.total == 1
+    assert result.items[0].stack == "backend"
+    assert result.stack_filter == "backend"
+
+
+@pytest.mark.asyncio
+async def test_search_invalid_stack_raises_value_error(mock_repo):
+    with pytest.raises(ValueError, match="Unknown stack"):
+        await SearchGuidelinesUseCase(mock_repo).execute("auth", stack="ruby")
+    mock_repo.search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_search_includes_summary_in_results(mock_repo):
+    mock_repo.search.return_value = [
+        Guideline._mock(slug="backend/01-alpha", stack="backend", title="Alpha"),
+    ]
+
+    result = await SearchGuidelinesUseCase(mock_repo).execute("alpha")
+
+    assert result.items[0].summary == "Mock content for testing."

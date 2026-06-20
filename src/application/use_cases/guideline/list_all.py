@@ -22,7 +22,7 @@ class ListGuidelinesUseCase:
             guidelines = [g for g in guidelines if g.stack == stack]
 
         items = [
-            GuidelineSummaryDto(slug=g.slug, stack=g.stack, title=g.title, tags=g.tags)
+            GuidelineSummaryDto(slug=g.slug, stack=g.stack, title=g.title, tags=g.tags, summary=g.summary)
             for g in guidelines
         ]
         return GuidelineListDto(items=items, total=len(items), stack_filter=stack)
