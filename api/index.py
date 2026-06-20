@@ -77,6 +77,24 @@ class RequestLoggingMiddleware:
             log_fn("response method=%s path=%s status=%d duration_ms=%.1f auth=%s", method, path, status_code, elapsed, auth_log)
 
 
+async def oauth_authorization_server(request: Request) -> JSONResponse:
+    """
+    RFC 8414 OAuth 2.0 Authorization Server Metadata.
+    Points clients at this server as the auth server; token_endpoint is
+    omitted and grant_types_supported is empty to signal no auth is required.
+    """
+    return JSONResponse(
+        {
+            "issuer": _base_url,
+            "registration_endpoint": f"{_base_url}/register",
+            "response_types_supported": [],
+            "grant_types_supported": [],
+            "token_endpoint_auth_methods_supported": ["none"],
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 async def oauth_register(request: Request) -> JSONResponse:
     """
     RFC 7591 Dynamic Client Registration stub.
@@ -123,6 +141,7 @@ async def _lifespan(app):
 _starlette = Starlette(
     lifespan=_lifespan,
     routes=[
+        Route("/.well-known/oauth-authorization-server", oauth_authorization_server),
         Route("/.well-known/oauth-protected-resource", oauth_protected_resource),
         Route("/.well-known/oauth-protected-resource/mcp", oauth_protected_resource),
         Route("/register", oauth_register, methods=["POST"]),
