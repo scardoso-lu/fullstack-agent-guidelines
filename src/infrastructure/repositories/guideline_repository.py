@@ -6,13 +6,17 @@ import aiofiles
 
 from src.domain.entities.guideline import VALID_STACKS, Guideline
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
+from src.utils.logger import get_logger
 from src.utils.markdown import extract_summary
+
+_logger = get_logger("repo.guideline")
 
 
 class GuidelineRepository(GuidelineRepositoryInterface):
     def __init__(self, guidelines_dir: Path) -> None:
         self._dir = guidelines_dir
         self._cache: dict[str, Guideline] | None = None
+        _logger.info("GuidelineRepository init dir=%s", guidelines_dir)
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -31,6 +35,7 @@ class GuidelineRepository(GuidelineRepositoryInterface):
         return [p for p in parts[1:] if p]
 
     async def _read_file(self, path: Path, stack: str) -> Guideline:
+        _logger.debug("loading file path=%s", path)
         async with aiofiles.open(path, encoding="utf-8") as f:
             content = await f.read()
         slug = f"{stack}/{path.stem}"
@@ -41,20 +46,24 @@ class GuidelineRepository(GuidelineRepositoryInterface):
 
     async def _load_all(self) -> dict[str, Guideline]:
         if self._cache is not None:
+            _logger.debug("cache hit — returning %d guidelines", len(self._cache))
             return self._cache
 
+        _logger.info("cache miss — loading guidelines from %s", self._dir)
         cache: dict[str, Guideline] = {}
         base = Path(self._dir)
 
         for stack in VALID_STACKS:
             stack_dir = base / stack
             if not stack_dir.is_dir():
+                _logger.debug("stack dir not found stack=%s path=%s", stack, stack_dir)
                 continue
             for path in sorted(stack_dir.glob("*.md")):
                 g = await self._read_file(path, stack)
                 cache[g.slug] = g
 
         self._cache = cache
+        _logger.info("guidelines loaded total=%d", len(self._cache))
         return self._cache
 
     # ------------------------------------------------------------------ #

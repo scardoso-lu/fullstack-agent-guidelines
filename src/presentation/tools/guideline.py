@@ -6,6 +6,9 @@ from src.application.use_cases.guideline.list_all import ListGuidelinesUseCase
 from src.application.use_cases.guideline.search import SearchGuidelinesUseCase
 from src.infrastructure.repositories.guideline_repository import get_guideline_repository
 from src.utils.exc import NotFoundError
+from src.utils.logger import get_logger
+
+_logger = get_logger("tools.guideline")
 
 
 def register_guideline_tools(mcp: FastMCP) -> None:
@@ -19,11 +22,15 @@ def register_guideline_tools(mcp: FastMCP) -> None:
         ),
     )
     async def list_guidelines(stack: str | None = None) -> dict:
+        _logger.info("tool=list_guidelines stack=%r", stack)
         try:
             use_case = ListGuidelinesUseCase(get_guideline_repository())
             result = await use_case.execute(stack)
-            return result.model_dump()
+            data = result.model_dump()
+            _logger.info("tool=list_guidelines stack=%r returned %d items", stack, len(data.get("guidelines", [])))
+            return data
         except ValueError as exc:
+            _logger.warning("tool=list_guidelines stack=%r error=%r", stack, str(exc))
             return {"error": str(exc)}
 
     @mcp.tool(
@@ -35,11 +42,14 @@ def register_guideline_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_guideline(slug: str) -> dict:
+        _logger.info("tool=get_guideline slug=%r", slug)
         try:
             use_case = GetGuidelineBySlugUseCase(get_guideline_repository())
             result = await use_case.execute(slug)
+            _logger.info("tool=get_guideline slug=%r found", slug)
             return result.model_dump()
         except NotFoundError as exc:
+            _logger.warning("tool=get_guideline slug=%r not_found error=%r", slug, str(exc))
             return {"error": str(exc), "slug": slug}
 
     @mcp.tool(
@@ -50,11 +60,15 @@ def register_guideline_tools(mcp: FastMCP) -> None:
         ),
     )
     async def search_guidelines(query: str, stack: str | None = None) -> dict:
+        _logger.info("tool=search_guidelines query=%r stack=%r", query, stack)
         try:
             use_case = SearchGuidelinesUseCase(get_guideline_repository())
             result = await use_case.execute(query, stack)
-            return result.model_dump()
+            data = result.model_dump()
+            _logger.info("tool=search_guidelines query=%r stack=%r returned %d items", query, stack, len(data.get("guidelines", [])))
+            return data
         except ValueError as exc:
+            _logger.warning("tool=search_guidelines query=%r stack=%r error=%r", query, stack, str(exc))
             return {"error": str(exc)}
 
     @mcp.tool(
@@ -66,6 +80,9 @@ def register_guideline_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_all_context(stack: str | None = None) -> str:
+        _logger.info("tool=get_all_context stack=%r", stack)
         repo = get_guideline_repository()
         use_case = GetAllContextUseCase(repo)
-        return await use_case.execute(stack)
+        result = await use_case.execute(stack)
+        _logger.info("tool=get_all_context stack=%r returned %d chars", stack, len(result))
+        return result

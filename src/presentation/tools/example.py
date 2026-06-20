@@ -4,6 +4,9 @@ from src.application.use_cases.example.get_by_name import GetExampleByNameUseCas
 from src.application.use_cases.example.list_all import ListExamplesUseCase
 from src.infrastructure.repositories.example_repository import get_example_repository
 from src.utils.exc import NotFoundError
+from src.utils.logger import get_logger
+
+_logger = get_logger("tools.example")
 
 
 def register_example_tools(mcp: FastMCP) -> None:
@@ -18,10 +21,14 @@ def register_example_tools(mcp: FastMCP) -> None:
         ),
     )
     async def list_examples(stack: str | None = None, layer: str | None = None) -> dict:
+        _logger.info("tool=list_examples stack=%r layer=%r", stack, layer)
         try:
             result = await ListExamplesUseCase(get_example_repository()).execute(stack, layer)
-            return result.model_dump()
+            data = result.model_dump()
+            _logger.info("tool=list_examples stack=%r layer=%r returned %d items", stack, layer, len(data.get("examples", [])))
+            return data
         except ValueError as exc:
+            _logger.warning("tool=list_examples stack=%r layer=%r error=%r", stack, layer, str(exc))
             return {"error": str(exc)}
 
     @mcp.tool(
@@ -33,8 +40,11 @@ def register_example_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_example(name: str) -> dict:
+        _logger.info("tool=get_example name=%r", name)
         try:
             result = await GetExampleByNameUseCase(get_example_repository()).execute(name)
+            _logger.info("tool=get_example name=%r found", name)
             return result.model_dump()
         except NotFoundError as exc:
+            _logger.warning("tool=get_example name=%r not_found error=%r", name, str(exc))
             return {"error": str(exc), "name": name}

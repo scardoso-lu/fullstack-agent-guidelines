@@ -3,6 +3,9 @@ from mcp.server.fastmcp import FastMCP
 from src.application.use_cases.metadata.get_metadata import GetMetadataUseCase
 from src.infrastructure.repositories.example_repository import get_example_repository
 from src.infrastructure.repositories.guideline_repository import get_guideline_repository
+from src.utils.logger import get_logger
+
+_logger = get_logger("tools.metadata")
 
 
 def register_metadata_tools(mcp: FastMCP) -> None:
@@ -19,9 +22,16 @@ def register_metadata_tools(mcp: FastMCP) -> None:
         ),
     )
     async def get_metadata() -> dict:
+        _logger.info("tool=get_metadata")
         use_case = GetMetadataUseCase(
             guideline_repo=get_guideline_repository(),
             example_repo=get_example_repository(),
         )
         result = await use_case.execute()
-        return result.model_dump()
+        data = result.model_dump()
+        _logger.info(
+            "tool=get_metadata returned guidelines=%d examples=%d",
+            len(data.get("guidelines", [])),
+            len(data.get("examples", [])),
+        )
+        return data
