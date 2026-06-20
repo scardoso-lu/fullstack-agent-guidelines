@@ -58,12 +58,6 @@ class RequestLoggingMiddleware:
         _logger.info("request  method=%s path=%s client=%s host=%s auth=%s", method, path, client_ip, original_host, auth_log)
         _logger.debug("request  headers=%s", {k.decode(): v.decode() for k, v in raw_headers})
 
-        # FastMCP's StreamableHTTPSessionManager only accepts loopback hosts
-        # (DNS-rebinding protection). Rewrite Host to localhost so it passes;
-        # Vercel's edge layer handles real origin security.
-        patched_headers = [(b"host", b"localhost") if k == b"host" else (k, v) for k, v in raw_headers]
-        patched_scope = {**scope, "headers": patched_headers}
-
         status_code: int | None = None
 
         async def send_wrapper(message: dict) -> None:
@@ -73,7 +67,7 @@ class RequestLoggingMiddleware:
             await send(message)
 
         try:
-            await self._app(patched_scope, receive, send_wrapper)
+            await self._app(scope, receive, send_wrapper)
         except Exception as exc:
             elapsed = (time.monotonic() - start) * 1000
             _logger.error("response method=%s path=%s status=500 duration_ms=%.1f error=%r", method, path, elapsed, exc)
