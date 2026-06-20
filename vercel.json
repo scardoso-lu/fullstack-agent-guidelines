@@ -1,10 +1,10 @@
 {
   "version": 2,
+  "fluid": true,
   "functions": {
     "api/index.py": {
       "runtime": "@vercel/python",
       "maxDuration": 800,
-      "fluid": true,
       "includeFiles": ["guidelines/**", "examples/**", "src/**"]
     }
   },
