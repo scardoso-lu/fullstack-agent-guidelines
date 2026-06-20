@@ -6,6 +6,7 @@ from pathlib import Path
 # Ensure repo root is on sys.path when running from the api/ subdirectory
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
 from starlette.applications import Starlette  # noqa: E402
 from starlette.middleware.cors import CORSMiddleware  # noqa: E402
 from starlette.requests import Request  # noqa: E402
@@ -16,6 +17,12 @@ from starlette.types import ASGIApp, Receive, Scope, Send  # noqa: E402
 from src.config.settings import get_config  # noqa: E402
 from src.mcp_main import mcp  # noqa: E402
 from src.utils.logger import get_logger  # noqa: E402
+
+# Disable FastMCP's DNS-rebinding Host validation for Vercel: the check only
+# allows loopback Host headers and cannot be configured per-hostname at runtime.
+# Vercel's edge layer is the actual origin-security boundary; standalone and
+# Docker runs (which don't go through this module) keep the protection on.
+mcp.settings.transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
 _logger = get_logger("api")
 _config = get_config()

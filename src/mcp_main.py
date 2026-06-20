@@ -1,5 +1,4 @@
 from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
 
 from src.config.constants import C
 from src.config.settings import get_config
@@ -21,13 +20,9 @@ def create_mcp_server() -> FastMCP:
         config.MCP_TRANSPORT,
     )
 
-    # Disable FastMCP's DNS-rebinding protection: it only allows loopback Host
-    # headers, which breaks Vercel deployments. Vercel's edge layer is the
-    # actual security boundary for origin validation.
     server = FastMCP(
         name=C.TITLE,
         stateless_http=True,
-        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
 
     server.settings.host = config.MCP_HOST
