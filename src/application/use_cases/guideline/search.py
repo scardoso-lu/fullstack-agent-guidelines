@@ -1,7 +1,6 @@
 from src.application.dto.guideline_dto import GuidelineDto, SearchResultDto
+from src.domain.entities.guideline import VALID_STACKS
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
-
-_VALID_STACKS = frozenset({"backend", "frontend", "infra"})
 
 
 class SearchGuidelinesUseCase:

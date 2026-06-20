@@ -11,7 +11,6 @@ def create_mcp_server() -> FastMCP:
 
     server = FastMCP(
         name=C.TITLE,
-        version=C.PROJECT_VERSION,
     )
 
     server.settings.host = config.MCP_HOST

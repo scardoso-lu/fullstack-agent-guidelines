@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+VALID_STACKS: frozenset[str] = frozenset({"backend", "frontend", "infra"})
+
 
 @dataclass(frozen=True)
 class Guideline:

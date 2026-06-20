@@ -19,4 +19,5 @@ class GetGuidelineBySlugUseCase:
             title=guideline.title,
             content=guideline.content,
             tags=guideline.tags,
+            summary=guideline.summary,
         )

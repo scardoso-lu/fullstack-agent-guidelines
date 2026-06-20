@@ -11,7 +11,6 @@ from src.infrastructure.repositories.contract import ExampleRepositoryInterface
 
 _BACKEND_LAYERS = ("domain", "application", "infrastructure", "presentation")
 _FRONTEND_GLOBS = ("*.ts", "*.tsx")
-_BACKEND_GLOBS = ("*.py",)
 
 
 class ExampleRepository(ExampleRepositoryInterface):

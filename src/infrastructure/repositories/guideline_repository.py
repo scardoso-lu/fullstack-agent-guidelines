@@ -4,11 +4,9 @@ from pathlib import Path
 
 import aiofiles
 
-from src.domain.entities.guideline import Guideline
+from src.domain.entities.guideline import VALID_STACKS, Guideline
 from src.infrastructure.repositories.contract import GuidelineRepositoryInterface
 from src.utils.markdown import extract_summary
-
-_VALID_STACKS = ("backend", "frontend", "infra")
 
 
 class GuidelineRepository(GuidelineRepositoryInterface):
