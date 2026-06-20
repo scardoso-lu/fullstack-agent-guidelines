@@ -13,9 +13,9 @@ class SearchGuidelinesUseCase:
 
         if stack is not None:
             stack = stack.strip().lower()
-            if stack not in _VALID_STACKS:
+            if stack not in VALID_STACKS:
                 raise ValueError(
-                    f"Unknown stack '{stack}'. Valid values: {sorted(_VALID_STACKS)}"
+                    f"Unknown stack '{stack}'. Valid values: {sorted(VALID_STACKS)}"
                 )
 
         guidelines = await self.repo.search(query.strip())

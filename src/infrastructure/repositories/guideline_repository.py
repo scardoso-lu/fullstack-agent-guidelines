@@ -46,7 +46,7 @@ class GuidelineRepository(GuidelineRepositoryInterface):
         cache: dict[str, Guideline] = {}
         base = Path(self._dir)
 
-        for stack in _VALID_STACKS:
+        for stack in VALID_STACKS:
             stack_dir = base / stack
             if not stack_dir.is_dir():
                 continue
