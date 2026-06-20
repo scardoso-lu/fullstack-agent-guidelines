@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Ensure repo root is on sys.path when running from the api/ subdirectory
@@ -34,7 +35,14 @@ async def oauth_protected_resource(request: Request) -> JSONResponse:
     )
 
 
+@asynccontextmanager
+async def _lifespan(app):
+    async with mcp.session_manager.run():
+        yield
+
+
 _starlette = Starlette(
+    lifespan=_lifespan,
     routes=[
         Route("/.well-known/oauth-protected-resource", oauth_protected_resource),
         Route("/.well-known/oauth-protected-resource/mcp", oauth_protected_resource),
