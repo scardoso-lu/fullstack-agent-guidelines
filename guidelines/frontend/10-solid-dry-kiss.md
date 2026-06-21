@@ -53,8 +53,12 @@ export default async function DrugPage() {
 // useDrugForm — validation and submission only
 function useDrugForm(onSuccess: () => void) {
   const form = useForm<DrugFormData>({ resolver: zodResolver(DrugSchema) });
-  const { mutate } = useMutation({ mutationFn: DrugService.create, onSuccess });
-  return { form, submit: form.handleSubmit((data) => mutate(data)) };
+  const submit = form.handleSubmit(async (data) => {
+    const result = await createDrugAction(data);    // Server Action — see frontend/16
+    if (result.status === "ok") onSuccess();
+    // map result.fieldErrors back onto the form on error (omitted here)
+  });
+  return { form, submit };
 }
 
 // CreateDrugForm — renders the form, delegates logic to the hook
@@ -171,25 +175,33 @@ In React this means: pass behaviour as props or hooks, not baked-in service call
 **Violated:**
 ```tsx
 // ❌ DrugCard is tightly coupled to DrugService
+"use client";
 function DrugCard({ id }: { id: number }) {
-  const { data } = useQuery({
-    queryKey: ["drugs", id],
-    queryFn: () => DrugService.getById(id),  // concrete dependency
-  });
+  const [drug, setDrug] = useState<DrugDataItem | null>(null);
+  useEffect(() => {
+    DrugService.getById(id).then(setDrug);          // concrete dependency
+  }, [id]);
+  return <div>{drug?.inn}</div>;
 }
 ```
 
 **Fixed — dependency is injected:**
 ```tsx
 // ✅ DrugCard depends on a function (interface), not DrugService
+"use client";
 type DrugCardProps = {
   id: number;
-  fetchDrug: (id: number) => Promise<DrugDataItem>;  // injected
+  fetchDrug: (id: number, opts: { signal: AbortSignal }) => Promise<DrugDataItem>;
 };
 
 function DrugCard({ id, fetchDrug }: DrugCardProps) {
-  const { data } = useQuery({ queryKey: ["drugs", id], queryFn: () => fetchDrug(id) });
-  return <div>{data?.inn}</div>;
+  const [drug, setDrug] = useState<DrugDataItem | null>(null);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetchDrug(id, { signal: ctrl.signal }).then(setDrug).catch(() => {});
+    return () => ctrl.abort();
+  }, [id, fetchDrug]);
+  return <div>{drug?.inn}</div>;
 }
 
 // Real usage

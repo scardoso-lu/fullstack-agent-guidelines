@@ -274,46 +274,58 @@ export function DrugForm({ onSuccess }: { onSuccess: () => void }) {
 
 ---
 
-## Combining with React Query Mutations
+## Combining with Server Actions
+
+For most write paths the action's own `useActionState` (per `frontend/16-server-actions`) is enough — the action validates with the same Zod schema server-side and returns errors as state. Use React Hook Form's client validation as a **pre-submit gate** so invalid data never crosses the wire and the user gets per-field feedback synchronously, then forward to the Server Action on success:
 
 ```tsx
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { createDrugAction } from "@/app/(app)/drugs/_actions";
+
 export function CreateDrugForm({ onClose }: { onClose: () => void }) {
-  const queryClient = useQueryClient();
-
-  const { mutate, isPending } = useMutation({
-    mutationFn: DrugService.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["drugs"] });
-      onClose();
-    },
-  });
-
   const form = useForm<DrugFormData>({
     resolver: zodResolver(DrugSchema),
     defaultValues: { inn: "", atc_code: "" },
   });
 
-  const onSubmit = (data: DrugFormData) => mutate(data);
-  //               ^ only called if schema validation passes
+  const onSubmit = form.handleSubmit(async (data) => {
+    const result = await createDrugAction(data);          // Server Action — see frontend/16
+    if (result.status === "error") {
+      // The action returns server-side validation errors / domain errors as data,
+      // never as a thrown HTTPException; map them back onto the form.
+      if (result.fieldErrors) {
+        for (const [field, message] of Object.entries(result.fieldErrors)) {
+          form.setError(field as keyof DrugFormData, { type: "server", message });
+        }
+        return;
+      }
+      form.setError("root", { type: "server", message: result.formError });
+      return;
+    }
+    onClose();                                            // revalidateTag inside the action refreshes the list
+  });
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)}>
+    <form onSubmit={onSubmit}>
       {/* fields */}
-      <button type="submit" disabled={isPending}>
-        {isPending ? "Creating…" : "Create"}
+      <button type="submit" disabled={form.formState.isSubmitting}>
+        {form.formState.isSubmitting ? "Creating…" : "Create"}
       </button>
     </form>
   );
 }
 ```
 
-The schema validation gate runs before `mutate` — invalid data never hits the network.
+Two non-negotiables:
+
+1. **The same Zod schema runs on both sides.** Client validation is UX; the Server Action's server-side `safeParse` is the real gate. Define `DrugSchema` once and import it into both the form and the action.
+2. **Server errors return as data, not thrown exceptions.** The action's return type (`status: "ok" | "error"`) is part of the contract — the form pattern above relies on it. Don't throw from the action and hope `error.tsx` will catch it; map errors back onto the form fields.
+
+For genuinely client-driven submissions that need optimistic UI, retries, or background polling, write a small in-repo hook around `fetch` + `AbortController` rather than reaching for a library on the first occurrence.
 
 ---
 

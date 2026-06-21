@@ -118,6 +118,8 @@ class PagedItems(Generic[T]):
 
 Use case returns `PagedItems[Note]`; the DTO layer maps it to `PagedNotesDto`. The generic `T` keeps this reusable across all repository interfaces.
 
+`PagedItems[T]` is the **offset**-pagination envelope (with `current_page` + `total_count`). For **cursor**-pagination at the API boundary — which is the default for list endpoints — use `Page[T]` and the conventions in `backend/21-api-pagination`.
+
 ## Filesystem Repository (No Database)
 
 When data is static (like markdown files), skip the database entirely:

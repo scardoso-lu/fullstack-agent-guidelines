@@ -2,7 +2,7 @@
 
 > "The best code is the code you never wrote."
 
-Applies to all code — new components, targeted fixes, and changes to existing code. Covers the decision ladder, ponytail: comment convention, and anti-patterns — deprecated props, v2 components, stale React Query keys, optional Zod fields.
+Applies to all code — new components, targeted fixes, and changes to existing code. Covers the decision ladder, ponytail: comment convention, and anti-patterns — deprecated props, v2 components, stale cache tags, optional Zod fields.
 
 AI agents over-build. Given a task, they install packages, create wrapper components, add compatibility layers, and preserve old implementations "for safety." The result is 5× more code than necessary, slower builds, and a component tree the user can no longer navigate.
 
@@ -50,7 +50,7 @@ Minimizing code **never** means cutting these:
 - **Auth guards** — middleware or layout-level checks for protected routes
 - **Error boundaries** — per route segment (`error.tsx`)
 - **Accessibility attributes** — `aria-*`, `role`, keyboard nav, focus management
-- **Loading and error states** — every React Query call has `isPending` and `isError` paths
+- **Loading and error states** — every data-bound component handles the four states (`frontend/14-loading-error-empty-states`)
 
 The goal is code that is small because it is **necessary**, not artificially compressed.
 
@@ -209,27 +209,26 @@ function LegacyDrugCardWrapper({ id, name, atc }: { id: number; name: string; at
 // (nothing — the wrapper never needed to exist if callers were updated in the same PR)
 ```
 
-### Anti-pattern: Dead Query Keys and Stale React Query State
+### Anti-pattern: Dead Cache Tags After Renaming
 
-```tsx
-// ❌ WRONG — old query key kept alongside new one after renaming
-const { data } = useQuery({
-  queryKey: ["drug-list", page],        // old key — still in cache, still invalidated
-  // queryKey: ["drugs", "paged", page], // new key — agent added both "just in case"
-  queryFn: () => DrugService.paged(page, 20),
+```ts
+// ❌ WRONG — old cache tag kept alongside the new one after renaming
+// in the Server Component:
+const drugs = await fetch(`${API}/drugs`, {
+  next: { tags: ["drug-list", "drugs"] },   // old + new — agent added both "just in case"
 });
 
-// And in the mutation:
-queryClient.invalidateQueries({ queryKey: ["drug-list"] });   // old
-queryClient.invalidateQueries({ queryKey: ["drugs"] });        // new — both invalidated
+// in the Server Action:
+revalidateTag("drug-list");                  // old
+revalidateTag("drugs");                      // new — both invalidated, both kept alive
 ```
 
-```tsx
-// ✅ CORRECT — one key, consistently used everywhere after renaming
-const { data } = useQuery({
-  queryKey: ["drugs", "paged", page],
-  queryFn: () => DrugService.paged(page, 20),
-});
+```ts
+// ✅ CORRECT — one tag, consistently used everywhere after renaming
+const drugs = await fetch(`${API}/drugs`, { next: { tags: ["drugs"] } });
+
+// ...and in the Server Action:
+revalidateTag("drugs");
 // "drug-list" references fully removed — grep confirms zero occurrences
 ```
 
@@ -338,7 +337,7 @@ Adapted from the Lazy Senior Developer principle:
 - [ ] No "TODO: remove legacy component" comments — remove it now or don't merge
 - [ ] No commented-out JSX — git history is the reference
 - [ ] Service methods removed when their endpoint is removed — no `@deprecated` methods left alive
-- [ ] React Query `queryKey` renamed everywhere at once — grep confirms zero old occurrences
+- [ ] Cache tags (`next: { tags: [...] }` + `revalidateTag(...)`) renamed everywhere at once — grep confirms zero old occurrences
 - [ ] Zod schema field removed when the form field is removed — not kept as `optional()`
 - [ ] Component narrowed by the user → component props narrowed in code, not expanded with "also accept old shape"
 - [ ] Validation, auth guards, error boundaries, accessibility, and loading states are intact — minimizing never touches these

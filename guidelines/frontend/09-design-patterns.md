@@ -124,20 +124,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html>
       <body>
-        <QueryProvider>       {/* React Query */}
-          <UserProvider>      {/* Auth state */}
-            <ThemeProvider>   {/* Dark/light mode */}
-              {children}
-            </ThemeProvider>
-          </UserProvider>
-        </QueryProvider>
+        <UserProvider>          {/* Auth state */}
+          <ThemeProvider>       {/* Dark/light mode */}
+            {children}
+          </ThemeProvider>
+        </UserProvider>
       </body>
     </html>
   );
 }
 ```
 
-**Anti-pattern:** wrapping each page individually creates multiple provider instances and breaks cache sharing.
+**Anti-pattern:** wrapping each page individually creates multiple provider instances and re-runs initialization on every navigation.
 
 ---
 
@@ -148,105 +146,72 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 A custom hook moves non-rendering logic out of components. The component calls a hook; the hook encapsulates the complexity.
 
 ```tsx
-// hooks/use-drug-search.ts
+// hooks/use-debounced-search.ts
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useQueryState } from "nuqs";
-import { DrugService } from "@/services/drugs";
+import { useEffect, useRef, useState } from "react";
 
-export function useDrugSearch() {
-  const [query, setQuery] = useQueryState("q", { defaultValue: "" });
-  const [page, setPage] = useQueryState("page", { defaultValue: "1" });
+export function useDebouncedSearch<T>(
+  fetcher: (query: string, opts: { signal: AbortSignal }) => Promise<T[]>,
+  initial: string = "",
+  delayMs: number = 250,
+) {
+  const [query, setQuery] = useState(initial);
+  const [results, setResults] = useState<T[]>([]);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const ctrlRef = useRef<AbortController | null>(null);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["drugs", "search", query, page],
-    queryFn: () => DrugService.paged(parseInt(page, 10), 20, query),
-    enabled: true,
-    placeholderData: (prev) => prev,
-  });
+  useEffect(() => {
+    if (query.length < 3) { setResults([]); setState("idle"); return; }
 
-  return {
-    query, setQuery,
-    page: parseInt(page, 10), setPage: (p: number) => setPage(String(p)),
-    data, isLoading, isError,
-  };
+    ctrlRef.current?.abort();
+    const ctrl = new AbortController();
+    ctrlRef.current = ctrl;
+
+    setState("loading");
+    const timer = setTimeout(async () => {
+      try {
+        const data = await fetcher(query, { signal: ctrl.signal });
+        if (!ctrl.signal.aborted) { setResults(data); setState("idle"); }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setState("error");
+      }
+    }, delayMs);
+
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [query, fetcher, delayMs]);
+
+  return { query, setQuery, results, state };
 }
 
 // Component is now trivially simple
+import { DrugService } from "@/services/drugs";
+
 export function DrugSearchPage() {
-  const { query, setQuery, data, isLoading } = useDrugSearch();
+  const { query, setQuery, results, state } = useDebouncedSearch(
+    (q, { signal }) => DrugService.searchSuggestions(q, { signal }),
+  );
 
   return (
     <div>
       <input value={query} onChange={(e) => setQuery(e.target.value)} />
-      {isLoading ? <Spinner /> : <DrugTable drugs={data?.data ?? []} />}
+      {state === "loading" ? <Spinner /> : <DrugTable drugs={results} />}
     </div>
   );
 }
 ```
 
----
-
-### Observer via React Query
-
-React Query implements the Observer pattern. Multiple components subscribe to the same `queryKey` — when the cache updates, all subscribers re-render. No manual pub/sub needed.
-
-```tsx
-// Both components observe the same cache key
-function DrugBadge({ id }: { id: number }) {
-  const { data } = useQuery({ queryKey: ["drugs", "detail", id], queryFn: () => DrugService.getById(id) });
-  return <span>{data?.inn}</span>;
-}
-
-function DrugHeader({ id }: { id: number }) {
-  const { data } = useQuery({ queryKey: ["drugs", "detail", id], queryFn: () => DrugService.getById(id) });
-  return <h1>{data?.atc_code}</h1>;
-}
-// Only ONE network request is made — both share the cached result
-```
+The hook owns the abort + debounce + state-machine boilerplate; every search-as-you-type feature in the project reuses it without re-deriving the safe pattern. The page-level Server Component (per `frontend/03-data-fetching`) renders the initial list; this hook only runs for the typing-driven refinement.
 
 ---
 
 ## Server Action Pattern — Command on the Server
 
-Server Actions are the Command pattern applied to Next.js. They encapsulate a server-side mutation, can be called from any Client Component, and trigger cache revalidation.
+Server Actions are the Command pattern applied to Next.js — they encapsulate a server-side mutation callable from any Client Component, with built-in cache revalidation.
 
-```ts
-// src/actions/drug.ts
-"use server";
+**See `frontend/16-server-actions` for the full pattern**, including the non-negotiable inside-the-action checklist (auth re-check, server-side input validation, error-as-data vs throw, `revalidateTag` semantics, audit-on-write, progressive enhancement).
 
-import { revalidatePath } from "next/cache";
-import { DrugService } from "@/services/drugs";
-
-export async function deleteDrugAction(drugId: number): Promise<void> {
-  await DrugService.delete(drugId);
-  revalidatePath("/en/admin/drugs");  // invalidate Next.js cache for this path
-}
-```
-
-```tsx
-// components/app/drug-delete-button.tsx
-"use client";
-
-import { deleteDrugAction } from "@/actions/drug";
-import { useTransition } from "react";
-
-export function DrugDeleteButton({ id }: { id: number }) {
-  const [isPending, startTransition] = useTransition();
-
-  return (
-    <button
-      disabled={isPending}
-      onClick={() => startTransition(() => deleteDrugAction(id))}
-    >
-      {isPending ? "Deleting…" : "Delete"}
-    </button>
-  );
-}
-```
-
-Server Actions are the preferred pattern for mutations that only need to invalidate the Next.js cache. Use React Query `useMutation` when you need optimistic updates or React Query cache invalidation.
+In short: a Server Action is the right tool when a `<form>` submit needs to mutate server state without a complex client-side flow. For rich client-driven flows (optimistic updates, retries, background polling), expose a Route Handler and drive it from a small in-repo client hook (`fetch` + `AbortController`).
 
 ---
 

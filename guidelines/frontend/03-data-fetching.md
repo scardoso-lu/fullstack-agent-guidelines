@@ -1,8 +1,8 @@
-# Data Fetching — Services, React Query, and Server Components
+# Data Fetching — Services, Server Components, and Server Actions
 
-Use when fetching data in a page or component. Covers the service layer (only services call fetch()), Server Component direct-await, React Query for client state, and why useEffect is the wrong tool for data fetching.
+Use when fetching or mutating data in a page or component. Covers the service layer (only services call fetch()), Server Component direct-await for reads, Server Actions for writes with tag-based revalidation, and the (rare) case where a Client Component genuinely needs to fetch (debounced search, polling).
 
-Every data fetch in the app goes through one of two paths: a **Server Component** fetching directly via a service function, or a **Client Component** fetching through React Query. Raw `fetch()` calls in components are never acceptable — they bypass error handling, type safety, and the shared auth layer.
+Every data fetch in the app goes through one of two paths: a **Server Component** fetching directly via a service function, or — only when the data is genuinely client-driven — a **Client Component** with `fetch` + `AbortController`. Raw `fetch()` calls in components are never acceptable — they bypass error handling, type safety, and the shared auth layer.
 
 ---
 
@@ -165,112 +165,122 @@ The response arrives fully rendered — no loading state, no flash of empty cont
 
 ---
 
-## React Query — Client-Side Fetching
+## Mutations — Server Actions, not client fetch
 
-Use React Query when:
-- The data changes based on user interaction (search, filters)
-- The data needs polling or background refresh
-- You need optimistic updates after mutations
+Writes go through **Server Actions** (per `frontend/16-server-actions`). The Server Action lives next to the feature, re-verifies the actor server-side, validates the input with Zod, calls into the same service the API does, then `revalidateTag()` / `revalidatePath()` so any cached reads on the next render are fresh.
 
-### `QueryProvider` Setup
+```ts
+// app/(app)/drugs/_actions.ts
+"use server";
 
-```tsx
-// src/providers/query-provider.tsx
-"use client";
+import { revalidateTag } from "next/cache";
+import { z } from "zod";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
-
-export function QueryProvider({ children }: { children: React.ReactNode }) {
-  const [client] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: { staleTime: 60_000, retry: 1 },
-    },
-  }));
-
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-}
-```
-
-### `useQuery` — Read
-
-```tsx
-// components/app/drug-search.tsx
-"use client";
-
-import { useQuery } from "@tanstack/react-query";
+import { getActorFromCookie } from "@/lib/auth/actor";
 import { DrugService } from "@/services/drugs";
 
-export function DrugSearch({ initialQuery }: { initialQuery: string }) {
-  const [query, setQuery] = useState(initialQuery);
+const DeleteDrug = z.object({ id: z.coerce.number().int().positive() });
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["drugs", "search", query],
-    queryFn: () => DrugService.searchSuggestions(query),
-    enabled: query.length > 2,   // don't fire on short queries
-    staleTime: 30_000,
-  });
+export async function deleteDrugAction(_prev: unknown, formData: FormData) {
+  const actor = await getActorFromCookie();
+  if (!actor) return { ok: false, error: "not signed in" } as const;
 
-  return (
-    <div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search drugs..."
-      />
-      {isLoading && <p>Searching...</p>}
-      {isError && <p>Failed to load results.</p>}
-      {data?.map((drug) => (
-        <div key={drug.id}>{drug.inn}</div>
-      ))}
-    </div>
-  );
+  const parsed = DeleteDrug.safeParse({ id: formData.get("id") });
+  if (!parsed.success) return { ok: false, error: "invalid id" } as const;
+
+  await DrugService.delete(parsed.data.id);
+  revalidateTag("drugs");
+  return { ok: true } as const;
 }
 ```
-
-### `useMutation` — Write
 
 ```tsx
 // components/app/drug-delete-button.tsx
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { DrugService } from "@/services/drugs";
+import { useActionState } from "react";
+import { deleteDrugAction } from "@/app/(app)/drugs/_actions";
 
 export function DrugDeleteButton({ drugId }: { drugId: number }) {
-  const queryClient = useQueryClient();
-
-  const { mutate, isPending } = useMutation({
-    mutationFn: (id: number) => DrugService.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["drugs"] });  // refetch list
-    },
-  });
-
+  const [state, formAction, isPending] = useActionState(deleteDrugAction, null);
   return (
-    <button onClick={() => mutate(drugId)} disabled={isPending}>
-      {isPending ? "Deleting…" : "Delete"}
-    </button>
+    <form action={formAction}>
+      <input type="hidden" name="id" value={drugId} />
+      <button type="submit" disabled={isPending}>
+        {isPending ? "Deleting…" : "Delete"}
+      </button>
+      {state?.error && <p role="alert">{state.error}</p>}
+    </form>
   );
 }
 ```
 
-**`queryKey` convention:**
+Pair the action with **tag-based revalidation** on the matching server fetches:
+
 ```ts
-["drugs"]                          // all drug queries
-["drugs", "search", query]         // specific search query
-["drugs", "detail", id]            // single item
-["drugs", "paged", page, size]     // paginated list
+// in a Server Component
+const drugs = await fetch(`${API}/drugs`, { next: { tags: ["drugs"] } });
 ```
 
-Invalidating `["drugs"]` clears all drug-related cache entries.
+After the action runs, `revalidateTag("drugs")` invalidates that fetch's cache; the next render serves fresh data. See `frontend/16-server-actions` for the non-negotiable inside-the-action checklist.
 
 ---
 
-## Anti-Pattern: Raw Fetch in useEffect
+## Client-side reads — only when the data is genuinely client-driven
+
+Reach for client-side `fetch` when the request depends on **post-mount** state (debounced typing, infinite scroll, a setting toggled at runtime) and even then keep it small and explicit:
 
 ```tsx
-// ❌ WRONG — never fetch in useEffect
+// components/app/drug-search.tsx
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { DrugService } from "@/services/drugs";
+
+export function DrugSearch({ initialQuery }: { initialQuery: string }) {
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<Drug[]>([]);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const ctrlRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (query.length < 3) { setResults([]); setState("idle"); return; }
+
+    ctrlRef.current?.abort();
+    const ctrl = new AbortController();
+    ctrlRef.current = ctrl;
+
+    setState("loading");
+    const timer = setTimeout(async () => {
+      try {
+        const data = await DrugService.searchSuggestions(query, { signal: ctrl.signal });
+        if (!ctrl.signal.aborted) { setResults(data); setState("idle"); }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setState("error");
+      }
+    }, 250);   // debounce
+
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [query]);
+
+  return /* ... */;
+}
+```
+
+Three things this gets right and nothing else:
+
+1. **`AbortController`** — every in-flight fetch is aborted before the next one starts, and on unmount. No race conditions, no `setState` after unmount.
+2. **A debounce** for typing-driven queries — typing "asp" should not fire three requests.
+3. **Loading / error states are first-class** (per `frontend/14-loading-error-empty-states`), not an afterthought.
+
+That's enough for the vast majority of client-driven cases. If a project finds itself rewriting this pattern across many features, extract a tiny in-repo hook (`useDebouncedFetch`) — don't add a library on the first occurrence. Any candidate library passes through `frontend/08-supply-chain` first.
+
+---
+
+## Anti-Pattern: Raw Fetch in useEffect for initial page data
+
+```tsx
+// ❌ WRONG — never fetch initial page data in useEffect
 "use client";
 
 export function DrugList() {
@@ -278,7 +288,7 @@ export function DrugList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/drugs")                 // no error handling, no caching
+    fetch("/api/drugs")                 // no error handling, no abort, no cache
       .then((r) => r.json())
       .then(setDrugs)
       .finally(() => setLoading(false));
@@ -289,7 +299,7 @@ export function DrugList() {
 }
 ```
 
-Problems: no error state, no deduplication, no cache, no loading UX beyond a spinner, doesn't cancel on unmount. Use React Query or a Server Component instead.
+Problems: no error state, no abort on unmount, flash of empty content, larger client bundle, worse LCP. Use a **Server Component** with `await service.list()` — that's what App Router exists for.
 
 ---
 
@@ -299,6 +309,6 @@ Problems: no error state, no deduplication, no cache, no loading UX beyond a spi
 - [ ] `authApi()` is used for authenticated requests; `api()` for public (login, register)
 - [ ] Return type annotations are present on every service method (`Promise<DrugDataItem[]>`)
 - [ ] Server Components fetch data directly via services — no `useEffect`, no loading state
-- [ ] React Query is used for interactive, user-driven, or polling data — not raw `fetch` in `useEffect`
-- [ ] `queryKey` arrays follow the `[entity, operation, params]` hierarchy
-- [ ] Mutations call `queryClient.invalidateQueries` on success to keep the UI consistent
+- [ ] Mutations go through a **Server Action**, not a client-side fetch + cache-bust
+- [ ] Server-side `fetch` calls tag their cache (`next: { tags: ["..."] }`) so Server Actions can revalidate them
+- [ ] Client-side fetch (when truly needed) uses `AbortController` and a debounce; never for initial page data

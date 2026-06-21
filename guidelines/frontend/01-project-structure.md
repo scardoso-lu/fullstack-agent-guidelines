@@ -34,8 +34,8 @@ src/
 ├── locale/                   ← i18n translation files
 ├── middleware.ts             ← Edge middleware: locale detection, auth redirect
 ├── providers/
-│   ├── query-provider.tsx    ← <QueryClientProvider> wrapper
-│   └── user-provider.tsx     ← UserContext: current user + logout
+│   ├── user-provider.tsx     ← UserContext: current user + logout
+│   └── theme-provider.tsx    ← Dark/light mode
 └── services/
     ├── api.ts                ← Base fetch wrappers: authApi(), api(), TypedResponse<T>
     ├── dashboard.ts          ← Domain service: DashboardService.stats()

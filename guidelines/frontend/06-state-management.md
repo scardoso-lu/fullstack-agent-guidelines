@@ -1,6 +1,6 @@
-# State Management — React Query, Context, URL State, and Local State
+# State Management — Where Server, Global UI, URL, and Local State Live
 
-Use when choosing where to store a piece of state. Covers the four buckets — React Query (server state), Context (global UI), URL params via nuqs (shareable state), useState (local) — and the rule for when each applies.
+Use when choosing where to store a piece of state in a Next.js App Router app. Covers the four buckets — **server state stays on the server** (Server Components + Server Actions, *not* a client cache), Context (global client UI), URL params via `nuqs` (shareable state), `useState` (local) — and the rule for when each applies.
 
 State in a Next.js App Router app falls into four buckets. Choosing the wrong one causes cache invalidation bugs, unnecessary re-renders, or state that gets lost on navigation. Match the bucket to the kind of state.
 
@@ -10,78 +10,98 @@ State in a Next.js App Router app falls into four buckets. Choosing the wrong on
 
 | State type | Lives in | Tool |
 |---|---|---|
-| Server data (users, drugs, catalogs) | React Query cache | `useQuery` / `useMutation` |
-| Global UI state (current user, theme) | React Context | `useContext` + Provider |
+| Server data (users, drugs, catalogs) | The server | Server Components for reads · Server Actions for writes · `next/cache` tags for revalidation |
+| Global client UI state (current user, theme) | React Context | `useContext` + Provider |
 | URL-synchronized state (filters, tab, page) | URL search params | `nuqs` `useQueryState` |
 | Ephemeral UI state (open/closed, hover) | Component local | `useState` |
 
-**Default rule:** push state as high (URL > Context > component) as it needs to be for sharing — and no higher. A dialog's open/closed state belongs in `useState`. A search filter that appears in the URL belongs in `nuqs`.
+**Default rule:** push state as high (server > URL > Context > component) as it needs to be for sharing — and no higher. A dialog's open/closed state belongs in `useState`. A search filter that appears in the URL belongs in `nuqs`. Anything that came from the API belongs **on the server**, not in a client cache.
 
 ---
 
-## React Query — Server State
+## Server State — keep it on the server
 
-React Query is the cache for all remote data. It handles loading, error, and stale states automatically. Never duplicate server state in `useState`.
+The App Router's headline feature is that server data doesn't need a client-side cache. **Reads happen in Server Components; writes happen in Server Actions; cache invalidation is tag-based and runs on the server.** That triangle covers ~90% of what a client cache would do — without shipping the cache, the hydration glue, or its supply-chain surface, to every visitor.
 
 ```tsx
-// ✅ Correct — React Query owns the server data
-"use client";
-
-import { useQuery } from "@tanstack/react-query";
+// app/[lang]/(private)/admin/drugs/page.tsx — Server Component
 import { DrugService } from "@/services/drugs";
-import { useQueryState } from "nuqs";
 
-export function DrugList() {
-  const [page, setPage] = useQueryState("page", { defaultValue: "1" });
-  const [search] = useQueryState("q", { defaultValue: "" });
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["drugs", "paged", page, search],
-    queryFn: () => DrugService.paged(parseInt(page), 20, search),
-  });
-
-  return (
-    <div>
-      {isLoading && <p>Loading…</p>}
-      {isError && <p>Failed to load.</p>}
-      {data?.data.map((drug) => <DrugRow key={drug.id} drug={drug} />)}
-      <Pagination current={parseInt(page)} total={data?.total ?? 0} onChange={setPage} />
-    </div>
-  );
+export default async function DrugsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const { q = "", page = "1" } = await searchParams;
+  const result = await DrugService.paged(Number(page), 20, q);   // server-side fetch (taggable)
+  return <DrugTable rows={result.data} total={result.total} page={Number(page)} />;
 }
 ```
 
+Tag the `fetch` so a Server Action can invalidate it:
+
+```ts
+// inside DrugService.paged
+const res = await fetch(`${API}/drugs?...`, { next: { tags: ["drugs"] } });
+```
+
+```ts
+// app/(app)/drugs/_actions.ts
+"use server";
+import { revalidateTag } from "next/cache";
+
+export async function deleteDrugAction(formData: FormData) {
+  await DrugService.delete(Number(formData.get("id")));
+  revalidateTag("drugs");        // next render of DrugsPage serves fresh data
+}
+```
+
+See `frontend/03-data-fetching` for the full service-layer + cache-tag pattern and `frontend/16-server-actions` for the non-negotiable inside-the-action checklist.
+
+### When you genuinely need a client read (debounced search, polling)
+
+Some flows truly do not work as a Server Component — debounced search-as-you-type, infinite scroll, a panel that polls. Use a small Client Component with `useEffect` + `AbortController` + a debounce; keep the pattern local to the component. See the `DrugSearch` example in `frontend/03-data-fetching`.
+
+If a project finds itself rewriting that pattern across many features, extract a tiny in-repo hook (`useDebouncedFetch`). Don't add a library on the first occurrence — and if you eventually do, any candidate passes through `frontend/08-supply-chain` first.
+
+### Anti-pattern — caching server state in `useState`
+
 ```tsx
-// ❌ Wrong — duplicating server state in useState
+// ❌ Wrong — manual cache in client memory, ships rendering and stale-data bugs
 "use client";
 
 export function DrugList() {
-  const [drugs, setDrugs] = useState([]);
+  const [drugs, setDrugs] = useState<Drug[]>([]);
 
   useEffect(() => {
-    DrugService.paged(1, 20).then((r) => setDrugs(r.data));  // no cache, no dedup, no error state
+    DrugService.paged(1, 20).then((r) => setDrugs(r.data));
   }, []);
+
+  return drugs.map((d) => <DrugRow key={d.id} drug={d} />);
 }
 ```
 
+Problems: flash of empty content, no error/loading discipline (`frontend/14-loading-error-empty-states`), no abort on unmount, no revalidation after mutations, worse LCP. The Server Component version above sends rendered HTML in the first byte.
+
 ---
 
-## React Context — Global Client State
+## React Context — Global Client UI State
 
 Use Context only for state that is:
-1. Needed by many components at different nesting levels
-2. Not server data (that belongs in React Query)
-3. Not derivable from the URL
 
-Current user and theme are the canonical examples. Avoid putting derived or fetched data in Context — it becomes a second cache that diverges from React Query.
+1. Needed by many components at different nesting levels.
+2. **Not server data** (that lives on the server).
+3. Not derivable from the URL.
+
+Current user and theme are the canonical examples.
 
 ```tsx
 // src/providers/user-provider.tsx
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
-import { decodeToken } from "@/lib/jwt";
+import { createContext, useContext, useEffect, useState } from "react";
 import { cookieStore } from "@/lib/cookies";
+import { decodeToken } from "@/lib/jwt";
 
 type User = { sub: string; email: string };
 const UserContext = createContext<{ user: User | null; logout: () => void } | null>(null);
@@ -119,7 +139,7 @@ export const useUser = () => {
 // ❌ Wrong — putting everything in one context
 const AppContext = createContext({
   user: null,
-  drugs: [],            // server data — belongs in React Query
+  drugs: [],            // server data — render on the server, don't cache in client memory
   selectedDrug: null,   // URL state — belongs in nuqs
   sidebarOpen: false,   // local state — belongs in useState
   theme: "light",       // fine in context
@@ -164,12 +184,13 @@ export function DrugFilters() {
 }
 ```
 
-The URL becomes `/en/admin/drugs?q=paracetamol&page=2` — shareable, bookmarkable, survives hard refresh.
+The URL becomes `/en/admin/drugs?q=paracetamol&page=2` — shareable, bookmarkable, survives hard refresh. The parent Server Component picks the params up from `searchParams` and refetches — no client-side cache needed.
 
 **When NOT to use nuqs:**
+
 - Ephemeral UI state (modal open/closed, hover) — `useState`
 - Auth state — `UserContext`
-- Multi-step wizard state shared between steps but not in the URL — `useState` in a parent or React Query with a `draft` mutation
+- Multi-step wizard state shared between steps but not in the URL — `useState` in a parent
 
 ---
 
@@ -219,14 +240,15 @@ export function DeleteConfirmModal({ onConfirm }: { onConfirm: () => void }) {
 ## Decision Tree
 
 ```
-Is this data fetched from the server?
-  → YES → React Query (useQuery / useMutation)
+Is this data fetched from the API?
+  → YES → server. Render in a Server Component, mutate via a Server Action,
+                  revalidate by tag. NEVER cache the API result in client state.
 
 Is this state needed by many unrelated components?
   → YES → Context (useContext + Provider) — only for truly global state (user, theme)
 
 Should the state appear in the URL / survive page refresh / be shareable?
-  → YES → nuqs (useQueryState)
+  → YES → nuqs (useQueryState) — and let the Server Component pick up searchParams
 
 Is it only used within one component or a small tree?
   → YES → useState
@@ -236,41 +258,45 @@ Is it only used within one component or a small tree?
 
 ## Combining All Four
 
-A realistic page uses all four types simultaneously:
+A realistic page uses all four types simultaneously — but server state never leaves the server-rendered surface:
 
 ```tsx
-// app/[lang]/(private)/admin/drugs/page.tsx (Server Component)
-export default async function DrugsPage() {
-  const initialDrugs = await DrugService.paged(1, 20);  // server state for initial render
-  return <DrugListClient initialData={initialDrugs} />;
+// app/[lang]/(private)/admin/drugs/page.tsx — Server Component
+export default async function DrugsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const { q = "", page = "1" } = await searchParams;
+  const result = await DrugService.paged(Number(page), 20, q);   // server state, lives on the server
+  return <DrugListClient initialRows={result.data} total={result.total} />;
 }
 
 // components/app/drug-list-client.tsx
 "use client";
-export function DrugListClient({ initialData }: { initialData: PaginationResponse<DrugDataItem> }) {
+export function DrugListClient({
+  initialRows,
+  total,
+}: { initialRows: DrugDataItem[]; total: number }) {
   const { user } = useUser();                         // Context — current user
-  const [search, setSearch] = useQueryState("q");     // nuqs — URL state
+  const [search, setSearch] = useQueryState("q");     // nuqs — URL state (drives the Server Component refetch)
   const [modalOpen, setModalOpen] = useState(false);  // useState — ephemeral UI
-
-  const { data } = useQuery({                         // React Query — server state with cache
-    queryKey: ["drugs", "paged", search],
-    queryFn: () => DrugService.paged(1, 20, search ?? ""),
-    initialData,                                      // avoid first-load spinner
-  });
+  // initialRows are server-rendered; updates happen by changing the URL,
+  // which re-renders the page on the server with fresh data.
   // ...
 }
 ```
 
-`initialData` in `useQuery` hydrates the cache from the server — the page renders with data instantly, and React Query takes over for subsequent interactions.
+The client component receives the initial rows as props; changing the URL re-renders the page on the server with fresh data. No client-side cache to synchronize.
 
 ---
 
 ## Quick Checklist
 
-- [ ] Server data (from the API) is in React Query — never duplicated in `useState`
-- [ ] Context is used only for truly global client state (user, theme) — not for data that comes from the server
-- [ ] URL-related state (filters, page, active tab) uses `nuqs` `useQueryState`
-- [ ] Ephemeral UI state (open/closed, hover, animation) stays in `useState`
-- [ ] `initialData` is passed to `useQuery` from Server Components to avoid loading flashes
-- [ ] `queryClient.invalidateQueries` is called after mutations to keep the cache consistent
-- [ ] Context providers are at the root layout level — not wrapping individual pages
+- [ ] Server data lives on the server — rendered in Server Components, mutated via Server Actions, revalidated by tag. **Never duplicated in `useState` or a client cache.**
+- [ ] Server fetches set `next: { tags: [...] }`; matching Server Actions call `revalidateTag(...)` after a mutation.
+- [ ] Context is used only for truly global client UI state (user, theme).
+- [ ] URL-related state (filters, page, active tab) uses `nuqs` `useQueryState` — and the page-level Server Component reads from `searchParams` to refetch.
+- [ ] Ephemeral UI state (open/closed, hover, animation) stays in `useState`.
+- [ ] Client-side fetch (when truly needed for debounce/polling) uses `AbortController` + a debounce; never for initial page data.
+- [ ] Context providers are at the root layout level — not wrapping individual pages.

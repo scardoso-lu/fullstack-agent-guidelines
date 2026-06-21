@@ -10,9 +10,12 @@ An MCP server that gives AI coding assistants access to curated fullstack archit
 
 | Category | Guidelines |
 |---|---|
-| **Backend** | Project structure, domain / application / infrastructure / presentation layers, SOLID, DRY/KISS/YAGNI, security, testing, async patterns, design patterns, OWASP Top 10, database design, tech debt, and more |
-| **Frontend** | Project structure, server vs. client components, data fetching, forms & validation, authentication, state management, OWASP Top 10, supply chain, design patterns |
-| **Infra** | Docker Compose, testing in Docker, OpenTelemetry |
+| **Backend** | Project structure, domain / application / infrastructure / presentation layers, SOLID, DRY/KISS/YAGNI, security, testing, async patterns, design patterns, OWASP Top 10, database design, tech debt, observability/logging, audit-on-write, error handling & exception hierarchy, API pagination, idempotency, safe Alembic migrations |
+| **Frontend** | Project structure, server vs. client components, data fetching, forms & validation, authentication, state management, OWASP Top 10, supply chain, design patterns, loading/error/empty states, accessibility, Server Actions, component testing, performance, Playwright E2E |
+| **Infra** | Docker Compose, testing in Docker, OpenTelemetry, Makefile as the gate |
+| **Agile** | Vertical slices, definition of done, conventional commits, pull requests |
+| **QA** | Code review, E2E-per-feature |
+| **Architecture** | Technology selection (dependency adoption checklist) |
 
 ### Tools exposed
 

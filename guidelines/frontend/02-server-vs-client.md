@@ -55,7 +55,7 @@ Add it to the lowest possible node in the tree — only the component that actua
 | `useEffect` | `"use client"` |
 | Event handlers (`onClick`, `onChange`) | `"use client"` |
 | Browser APIs (`window`, `localStorage`) | `"use client"` |
-| Third-party hooks (React Query, React Hook Form) | `"use client"` |
+| Third-party client hooks (React Hook Form, swiper, etc.) | `"use client"` |
 | Animation (Framer Motion) | `"use client"` |
 | Context consumers | `"use client"` |
 
@@ -103,33 +103,51 @@ import { UserGreeting } from "@/components/app/user-greeting";  // Server Compon
 // This breaks — Server Component cannot run in client context
 ```
 
-## Data Fetching: Server vs React Query
+## Data Fetching: Server vs Client
+
+The default is **Server Components for reads, Server Actions for writes**. Reach for client-side fetching only when the data genuinely depends on client-only state (after-mount interaction, polling, debounced input).
 
 | Scenario | Use |
 |---|---|
 | Initial page data, SEO matters | Server Component + `await service.call()` |
-| Data that needs refetching (polling, stale-while-revalidate) | React Query `useQuery` |
-| Data that changes based on user interaction | React Query `useQuery` |
-| Mutations (create, update, delete) with optimistic UI | React Query `useMutation` |
-| Fire-and-forget server mutation (cache revalidation) | Server Action |
+| Data driven by user interaction *after* page load (search-as-you-type, filters) | Client Component + `fetch` inside a `useEffect`/`useTransition` with an `AbortController` |
+| Polling / live updates | Client Component + interval + `fetch`, or Server Component refresh via `router.refresh()` after a Server Action |
+| Mutations (create, update, delete) | **Server Action** (per `frontend/16-server-actions`) |
+| Fire-and-forget server mutation with cache revalidation | Server Action + `revalidateTag` / `revalidatePath` |
+
+For everything except "interactive client-driven flow," prefer Server Components — they ship rendered HTML, no client bundle, no loading flicker.
 
 ```tsx
 // Server Component — data fetched before HTML is sent
 export default async function CatalogPage() {
-  const catalogs = await CatalogService.list();  // no loading state needed
+  const catalogs = await CatalogService.list();   // no loading state needed
   return <CatalogTable data={catalogs} />;
 }
+```
 
-// Client Component — data fetched in browser, managed by React Query
+```tsx
+// Client Component — only when the fetch genuinely needs client state (debounced query)
 "use client";
+import { useEffect, useState } from "react";
+import { DrugService } from "@/services/drugs";
+
 export function LiveDrugSearch({ initialQuery }: { initialQuery: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["drugs", initialQuery],
-    queryFn: () => DrugService.searchSuggestions(initialQuery),
-  });
-  // ...
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<Drug[]>([]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    DrugService.searchSuggestions(query, { signal: ctrl.signal })
+      .then(setResults)
+      .catch((e) => { if (e.name !== "AbortError") throw e; });
+    return () => ctrl.abort();
+  }, [query]);
+
+  return /* ... */;
 }
 ```
+
+If a project repeatedly needs polling, optimistic updates, or stale-while-revalidate semantics across many features, that's the point to introduce a small in-repo hook (or a vetted library, after running it through `frontend/08-supply-chain`). Don't add a library on the first occurrence.
 
 ## Anti-Pattern: Client Everywhere
 
@@ -160,5 +178,6 @@ The server component version above sends fully-rendered HTML — no loading flas
 - [ ] `"use client"` is placed at the lowest component that needs it
 - [ ] `async/await` data fetching only in Server Components — never in `useEffect` for initial data
 - [ ] Server Components pass data to Client Components via props
-- [ ] React Query is used for client-side fetching, not raw `fetch` in `useEffect`
+- [ ] Client-side `fetch` (when truly needed) uses `AbortController` and runs only on user-driven interaction — never for the initial page data
 - [ ] No `useState(null)` + `useEffect(fetch)` pattern where a Server Component would work
+- [ ] Mutations go through a Server Action, not a hand-rolled client fetch + cache-bust

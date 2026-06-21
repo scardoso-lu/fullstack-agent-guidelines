@@ -148,6 +148,14 @@ class CreateNoteDto(BaseSchema):
 
 Pydantic validators enforce *type* and *format*. Business rules belong in use cases where they can be unit-tested independently and expressed as domain errors.
 
+## Related patterns
+
+Use-cases that **write** should follow the `WriteUseCase` base class pattern in `backend/19-audit-on-write` — it makes audit-on-write automatic (single transaction, atomic with the business write) instead of leaving it to the author to remember per use-case. Read-only use-cases can stay on the simple shape shown above.
+
+For the **error model** raised by use-cases (module-rooted exception hierarchy, never `HTTPException` in the application layer, mapped to HTTP at the edge), see `backend/20-error-handling`.
+
+For **list use-cases**, return the canonical `Page[T]` envelope and follow the cursor-pagination pattern in `backend/21-api-pagination` — never invent ad-hoc pagination per use-case.
+
 ## Quick Checklist
 
 - [ ] Every use case is a class with only `__init__(self, repo)` and `async execute(...)`
@@ -156,3 +164,5 @@ Pydantic validators enforce *type* and *format*. Business rules belong in use ca
 - [ ] Input validation (business rules) is in `execute()`, not in the DTO validator
 - [ ] `HTTPException` never appears in the application layer
 - [ ] DTOs extend `BaseSchema` for consistent config
+- [ ] Write use-cases extend `WriteUseCase` (audit emitted in the same transaction)
+- [ ] List use-cases return `Page[T]` with cursor-based pagination by default

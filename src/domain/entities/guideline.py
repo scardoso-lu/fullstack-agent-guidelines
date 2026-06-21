@@ -1,6 +1,15 @@
 from dataclasses import dataclass, field
 
-VALID_STACKS: frozenset[str] = frozenset({"backend", "frontend", "infra"})
+VALID_STACKS: frozenset[str] = frozenset(
+    {
+        "backend",
+        "frontend",
+        "infra",
+        "agile",
+        "qa",
+        "architecture",
+    }
+)
 
 
 @dataclass(frozen=True)
