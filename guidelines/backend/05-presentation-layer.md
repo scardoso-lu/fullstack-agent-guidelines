@@ -33,8 +33,8 @@ The handler does exactly three things:
 
 Never register routes on `app` directly. Use `APIRouter` so each domain module is self-contained:
 
+**`src/presentation/routes/user.py`**
 ```python
-# src/presentation/routes/user.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
@@ -65,8 +65,8 @@ async def create_user(
 
 All routers and middleware are registered in one place. `api_main.py` stays clean:
 
+**`src/presentation/view.py`**
 ```python
-# src/presentation/view.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -89,8 +89,8 @@ def register_middleware(app: FastAPI) -> None:
     )
 ```
 
+**`src/api_main.py`**
 ```python
-# src/api_main.py
 from fastapi import FastAPI
 from src.config.constants import C
 from src.presentation.view import register_api_routes, register_middleware
@@ -125,8 +125,8 @@ async def get_user(user_id: int, ...):
 
 `Depends()` wires external resources into route handlers without global state:
 
+**`src/infrastructure/db/engine.py`**
 ```python
-# src/infrastructure/db/engine.py
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         yield session
@@ -144,8 +144,8 @@ async def get_user(
 
 For auth, a reusable dependency extracts the current user from the JWT:
 
+**`src/infrastructure/services/auth_dependency.py`**
 ```python
-# src/infrastructure/services/auth_dependency.py
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 async def get_current_user(
@@ -180,8 +180,8 @@ async def get_user(user_id: int, session: Annotated[AsyncSession, Depends(get_se
 
 For global handling across all routes, register exception handlers on the app:
 
+**`src/presentation/view.py`**
 ```python
-# src/presentation/view.py
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(NotFoundError)
     async def not_found_handler(request: Request, exc: NotFoundError):
@@ -212,8 +212,8 @@ async def delete_user(user_id: int, session: Annotated[AsyncSession, Depends(get
 
 ## Authentication Route Pattern
 
+**`src/presentation/routes/auth.py`**
 ```python
-# src/presentation/routes/auth.py
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 

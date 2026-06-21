@@ -28,8 +28,8 @@ If your team genuinely prefers `just` or `task`, the principle is identical — 
 
 ## A skeleton — backend + frontend monorepo
 
+**`Makefile — single command surface for the project`**
 ```makefile
-# Makefile — single command surface for the project
 # Every recipe calls raw tools so CI and contributors run the same commands.
 
 SHELL := /bin/bash
@@ -145,8 +145,8 @@ security: ## Run dependency + image + secret scans
 
 Instead of duplicating the commands in CI YAML, CI calls `make`:
 
+**`.github/workflows/ci.yml`**
 ```yaml
-# .github/workflows/ci.yml
 jobs:
   gate:
     runs-on: ubuntu-latest

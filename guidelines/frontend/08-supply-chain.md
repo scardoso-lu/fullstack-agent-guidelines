@@ -53,8 +53,8 @@ Semver ranges (`^`, `~`, `>=`) mean "install whatever is latest" at the time of 
 
 Setting `save-exact` in `.npmrc` makes this the default for every `npm install <pkg>`:
 
+**`.npmrc`**
 ```ini
-# .npmrc
 save-exact=true
 engine-strict=true
 ```
@@ -84,8 +84,8 @@ Rules:
 
 ## Audit in CI — Break the Build on Known CVEs
 
+**`.github/workflows/ci.yml`**
 ```yaml
-# .github/workflows/ci.yml
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -110,8 +110,8 @@ For pnpm:
 
 ## Dependabot — Automated Dependency Updates
 
+**`.github/dependabot.yml`**
 ```yaml
-# .github/dependabot.yml
 version: 2
 updates:
   - package-ecosystem: npm

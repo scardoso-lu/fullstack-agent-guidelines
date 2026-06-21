@@ -37,8 +37,8 @@ my-project/
 
 ## docker-compose.yml
 
+**`docker-compose.yml`**
 ```yaml
-# docker-compose.yml
 services:
   backend:
     build:
@@ -84,8 +84,8 @@ networks:
 
 Extends the base compose with live-reloading mounts. Run both files together — the override replaces only what it declares:
 
+**`docker-compose.dev.yml`**
 ```yaml
-# docker-compose.dev.yml
 services:
   backend:
     volumes:
@@ -113,8 +113,8 @@ docker compose up
 
 Each service loads only its own secrets — no shared root `.env`:
 
+**`.env.backend — gitignored`**
 ```bash
-# .env.backend — gitignored
 ENVIRONMENT=DEV
 API_HOST=0.0.0.0
 API_PORT=8000
@@ -142,8 +142,8 @@ Keep `.env.*.example` files current whenever a new variable is added. They are t
 
 Inside the Docker network, services communicate by service name. The frontend container reaches the backend via `http://backend:8000`, not `http://localhost:8000`:
 
+**`.env.frontend (inside Docker)`**
 ```bash
-# .env.frontend (inside Docker)
 NEXT_PUBLIC_API_URL=http://backend:8000
 
 # .env.frontend (local dev without Docker)

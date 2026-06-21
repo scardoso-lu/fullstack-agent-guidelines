@@ -17,8 +17,8 @@ Good tests prove that business rules work — not that Python syntax is correct.
 
 ## pytest-asyncio Setup
 
+**`pyproject.toml`**
 ```toml
-# pyproject.toml
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
 addopts = "--cov=src --cov-report=html --cov-report=xml"
@@ -40,8 +40,8 @@ ENVIRONMENT = "TEST"
 
 ## AsyncMock Pattern — The Core Testing Tool
 
+**`test/unit/application/use_cases/guideline/test_get_by_slug.py`**
 ```python
-# test/unit/application/use_cases/guideline/test_get_by_slug.py
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -88,8 +88,8 @@ async def test_empty_slug_raises(mock_repo):
 
 Every domain entity should have a static factory for test construction:
 
+**`src/domain/entities/user.py (from mdip-backend)`**
 ```python
-# src/domain/entities/user.py (from mdip-backend)
 @staticmethod
 def _mock(sub: int = 1) -> "User":
     user = User(name=f"Test User {sub}", email=f"test.{sub}@example.com", password="hashed")
@@ -133,8 +133,8 @@ This structure makes it immediately clear what each test is checking.
 
 Use `httpx.AsyncClient` with `app` to test routes end-to-end in memory — no running server, no real DB needed when you override `get_session` with a test DB:
 
+**`test/integration/routes/test_user_routes.py`**
 ```python
-# test/integration/routes/test_user_routes.py
 import pytest
 from httpx import AsyncClient, ASGITransport
 
@@ -167,8 +167,8 @@ Route tests verify that HTTP wiring is correct (status codes, response shape, au
 
 For filesystem-based repositories, use real files in a `test/fixtures/` directory:
 
+**`test/unit/infrastructure/repositories/test_guideline_repository.py`**
 ```python
-# test/unit/infrastructure/repositories/test_guideline_repository.py
 import pytest
 from pathlib import Path
 from src.infrastructure.repositories.guideline_repository import GuidelineRepository
@@ -191,8 +191,8 @@ async def test_cache_populated_after_first_call():
 
 ## Coverage Configuration
 
+**`pyproject.toml`**
 ```toml
-# pyproject.toml
 [tool.coverage.report]
 omit = [
     'src/api_main.py',        # wire-up code, not logic

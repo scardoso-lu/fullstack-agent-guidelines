@@ -130,8 +130,8 @@ uv sync
 
 ## Environment Variables
 
+**`.env.backend — real secrets; gitignored`**
 ```bash
-# .env.backend — real secrets; gitignored
 ENVIRONMENT=DEV
 API_HOST=0.0.0.0
 API_PORT=8000
@@ -139,8 +139,8 @@ DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/mydb
 JWT_SECRET=<generate: python -c "import secrets; print(secrets.token_hex(32))">
 ```
 
+**`.env.backend.example — committed template; no real values`**
 ```bash
-# .env.backend.example — committed template; no real values
 ENVIRONMENT=DEV
 API_HOST=0.0.0.0
 API_PORT=8000

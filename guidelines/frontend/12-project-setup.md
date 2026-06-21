@@ -17,8 +17,8 @@ npm packages can declare `postinstall`, `preinstall`, and `install` lifecycle ho
 
 ## .npmrc
 
+**`.npmrc — committed to git; applies on every npm install and npm ci`**
 ```ini
-# .npmrc — committed to git; applies on every npm install and npm ci
 ignore-scripts=true   # block all lifecycle hook execution
 save-exact=true       # pin versions — no ^ or ~ on npm install <pkg>
 engine-strict=true    # fail if node version doesn't match engines field
@@ -147,14 +147,14 @@ git add package-lock.json
 
 ## Environment Variables
 
+**`.env.frontend — real secrets; gitignored`**
 ```bash
-# .env.frontend — real secrets; gitignored
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXTAUTH_SECRET=...
 ```
 
+**`.env.frontend.example — committed template; no real values`**
 ```bash
-# .env.frontend.example — committed template; no real values
 NEXT_PUBLIC_API_URL=http://backend:8000
 NEXTAUTH_SECRET=<generate: openssl rand -hex 32>
 ```

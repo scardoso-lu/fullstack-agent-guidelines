@@ -27,8 +27,8 @@ Emit all three from the Collector — never wire application code directly to a 
 
 Add the Collector as a service. Both backend and frontend send to it on `4317` (gRPC) or `4318` (HTTP).
 
+**`docker-compose.yml — add to the existing services section`**
 ```yaml
-# docker-compose.yml — add to the existing services section
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.100.0
@@ -112,8 +112,8 @@ uv add \
 
 ### Telemetry Bootstrap
 
+**`src/telemetry.py`**
 ```python
-# src/telemetry.py
 import os
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
@@ -144,8 +144,8 @@ def setup_telemetry(service_name: str) -> None:
     metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
 ```
 
+**`src/main.py`**
 ```python
-# src/main.py
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
@@ -172,8 +172,8 @@ def create_app() -> FastAPI:
 
 Add spans at use case boundaries and on slow operations. Do not add spans inside repositories — the SQLAlchemy instrumentor already covers DB calls.
 
+**`src/application/use_cases/product/get_by_id.py`**
 ```python
-# src/application/use_cases/product/get_by_id.py
 from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
@@ -209,8 +209,8 @@ Keep span names stable and low-cardinality. Never include IDs or user data in sp
 
 ### Environment Variables
 
+**`.env.backend`**
 ```bash
-# .env.backend
 OTEL_SERVICE_NAME=my-backend
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 OTEL_TRACES_SAMPLER=parentbased_always_on   # sample all in dev; use ratio in prod
@@ -307,8 +307,8 @@ export default async function ProductsPage() {
 
 ### Environment Variables
 
+**`.env.frontend`**
 ```bash
-# .env.frontend
 OTEL_SERVICE_NAME=my-frontend
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318   # HTTP port for Next.js
 ```

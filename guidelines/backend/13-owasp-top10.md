@@ -97,8 +97,8 @@ url = "https://your-registry/simple/"
 priority = "primary"                # checked before PyPI
 ```
 
+**`.github/dependabot.yml — automated dependency updates`**
 ```yaml
-# .github/dependabot.yml — automated dependency updates
 version: 2
 updates:
   - package-ecosystem: pip
@@ -108,8 +108,8 @@ updates:
     open-pull-requests-limit: 10
 ```
 
+**`.github/workflows/ci.yml — pin action versions to a commit SHA, not a floating tag`**
 ```yaml
-# .github/workflows/ci.yml — pin action versions to a commit SHA, not a floating tag
 - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5   # v4 pinned to SHA
 # NOT: actions/checkout@v4  ← tag can be moved to point at malicious code
 ```
