@@ -34,8 +34,8 @@ src/
     └── exc.py              ← cross-module shared base (rarely needed)
 ```
 
+**`src/auth/exc.py`**
 ```python
-# src/auth/exc.py
 class AuthError(Exception):
     """Base class for every error raised by the auth module."""
 
@@ -93,8 +93,8 @@ Why this matters:
 
 A single FastAPI exception-handler mapping translates the module exceptions to status codes:
 
+**`src/auth/api.py`**
 ```python
-# src/auth/api.py
 from fastapi import APIRouter, Depends
 from src.auth.exc import (
     AuthError,
@@ -114,8 +114,8 @@ async def login(
     return await use_case.execute(dto)
 ```
 
+**`src/api_main.py — global exception handlers`**
 ```python
-# src/api_main.py — global exception handlers
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from src.auth.exc import (

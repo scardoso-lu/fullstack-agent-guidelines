@@ -21,8 +21,8 @@ Offset pagination is acceptable for admin tooling over small (< 10k row) dataset
 
 ## The response envelope (one shape for every list)
 
+**`src/shared/dto/paginated.py`**
 ```python
-# src/shared/dto/paginated.py
 from typing import Generic, TypeVar
 from pydantic import Field
 
@@ -53,8 +53,8 @@ A cursor is **an opaque string encoding the position to resume from**. It's opaq
 
 Encode (server-side):
 
+**`src/shared/pagination.py`**
 ```python
-# src/shared/pagination.py
 import base64
 import json
 from datetime import datetime
@@ -71,8 +71,8 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
 
 Per `backend/04-infrastructure-layer`, the repository receives its `AsyncSession` in `__init__` and returns **entities**; the application layer maps to DTOs.
 
+**`src/infrastructure/repositories/dataset_repository.py`**
 ```python
-# src/infrastructure/repositories/dataset_repository.py
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -111,8 +111,8 @@ class DatasetRepository(DatasetRepositoryInterface):
 
 The use-case maps entities to DTOs at the application boundary (per `backend/03-application-layer` — repos return entities, use-cases return DTOs):
 
+**`src/application/use_cases/dataset/list.py`**
 ```python
-# src/application/use_cases/dataset/list.py
 from src.application.dto.dataset_dto import DatasetDto
 from src.infrastructure.repositories.contract import DatasetRepositoryInterface
 from src.shared.pagination import Page
@@ -158,8 +158,8 @@ Acceptable when **all** of these hold:
 - The UX **really wants page numbers** ("Page 12 of 47") and not infinite scroll.
 - A consistent snapshot across pages isn't required.
 
+**`src/infrastructure/repositories/user_repository.py`**
 ```python
-# src/infrastructure/repositories/user_repository.py
 from sqlalchemy import func, select
 
 from src.infrastructure.repositories.contract import PagedItems, UserRepositoryInterface
@@ -187,8 +187,8 @@ Even here:
 
 ## Cap `page_size` server-side
 
+**`src/shared/pagination.py`**
 ```python
-# src/shared/pagination.py
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 

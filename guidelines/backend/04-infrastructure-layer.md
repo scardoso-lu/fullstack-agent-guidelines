@@ -15,8 +15,8 @@ A repository abstracts data access behind an interface. Use cases depend on the 
 
 **Step 1 — Define the interface in `contract.py`** (the only file use cases import):
 
+**`src/infrastructure/repositories/contract.py`**
 ```python
-# src/infrastructure/repositories/contract.py
 from abc import ABC, abstractmethod
 from src.domain.entities.note import Note
 
@@ -36,8 +36,8 @@ class NoteRepositoryInterface(ABC):
 
 **Step 2 — Implement it with SQLAlchemy**:
 
+**`src/infrastructure/repositories/note_repository.py`**
 ```python
-# src/infrastructure/repositories/note_repository.py
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.entities.note import Note
@@ -70,8 +70,8 @@ async with get_session() as session:
 
 ## SQLAlchemy Async Session Lifecycle
 
+**`src/infrastructure/db/engine.py`**
 ```python
-# src/infrastructure/db/engine.py
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -106,8 +106,8 @@ Key design choices:
 
 ## Pagination with PagedItems
 
+**`src/infrastructure/repositories/contract.py (from mdip-backend)`**
 ```python
-# src/infrastructure/repositories/contract.py (from mdip-backend)
 from dataclasses import dataclass
 from typing import Generic, TypeVar, Sequence
 
@@ -129,8 +129,8 @@ Use case returns `PagedItems[Note]`; the DTO layer maps it to `PagedNotesDto`. T
 
 When data is static (like markdown files), skip the database entirely:
 
+**`src/infrastructure/repositories/guideline_repository.py`**
 ```python
-# src/infrastructure/repositories/guideline_repository.py
 import aiofiles
 from pathlib import Path
 
@@ -172,8 +172,8 @@ poetry run task adbase          # alembic downgrade base
 
 The `alembic/env.py` must import all entity modules to register them with `Base.metadata`:
 
+**`alembic/env.py`**
 ```python
-# alembic/env.py
 from src.infrastructure.db.base import Base
 import src.domain.entities  # noqa — registers all models
 ```

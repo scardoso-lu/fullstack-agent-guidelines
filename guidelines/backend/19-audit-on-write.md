@@ -78,8 +78,8 @@ The payload should be **small** and **purposeful**. "The whole entity, before an
 
 Don't make every use-case author this by hand — it'll be forgotten. Bake it into the base class / unit-of-work:
 
+**`src/application/use_cases/base.py`**
 ```python
-# src/application/use_cases/base.py
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -109,8 +109,8 @@ class WriteUseCase(ABC):
         ...
 ```
 
+**`src/application/use_cases/dataset/archive.py`**
 ```python
-# src/application/use_cases/dataset/archive.py
 from src.application.audit import AuditEvent, AuditWriter
 from src.application.context import ActorContext
 from src.application.use_cases.base import WriteUseCase

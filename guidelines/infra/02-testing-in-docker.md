@@ -93,8 +93,8 @@ Add the test script to `package.json`:
 
 ## docker-compose.test.yml
 
+**`docker-compose.test.yml`**
 ```yaml
-# docker-compose.test.yml
 services:
   backend-test:
     build:
@@ -197,15 +197,15 @@ test-results/
 
 ## Test Environment Variables
 
+**`.env.backend.test — gitignored; overrides for the test environment`**
 ```bash
-# .env.backend.test — gitignored; overrides for the test environment
 ENVIRONMENT=TEST
 DATABASE_URL=sqlite+aiosqlite:///./test.db
 JWT_SECRET=test-secret-not-for-production
 ```
 
+**`.env.backend.test.example — committed template`**
 ```bash
-# .env.backend.test.example — committed template
 ENVIRONMENT=TEST
 DATABASE_URL=sqlite+aiosqlite:///./test.db
 JWT_SECRET=test-secret-not-for-production

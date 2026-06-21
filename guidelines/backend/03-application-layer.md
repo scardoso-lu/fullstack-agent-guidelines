@@ -27,8 +27,8 @@ This is the **Single Responsibility Principle** in practice. Each class changes 
 
 ## Use Case Structure
 
+**`src/application/use_cases/note/create.py`**
 ```python
-# src/application/use_cases/note/create.py
 from src.application.dto.note_dto import CreateNoteDto, NoteDto
 from src.domain.entities.note import Note
 from src.infrastructure.repositories.contract import NoteRepositoryInterface
@@ -54,8 +54,8 @@ Three rules every use case must follow:
 
 DTOs are Pydantic models that define the shape of data crossing layer boundaries.
 
+**`src/application/dto/__init__.py`**
 ```python
-# src/application/dto/__init__.py
 from pydantic import BaseModel, ConfigDict
 
 class BaseSchema(BaseModel):
@@ -75,8 +75,8 @@ return NoteDto.model_validate(saved_note)  # ← this works because from_attribu
 
 ### Input vs Output DTOs
 
+**`src/application/dto/note_dto.py`**
 ```python
-# src/application/dto/note_dto.py
 class CreateNoteDto(BaseSchema):  # ← input: what the caller provides
     title: str
     content: str = ""
@@ -92,8 +92,8 @@ Keep input and output DTOs separate — they evolve independently and have diffe
 
 ### Authentication DTOs (from mdip-backend)
 
+**`src/application/dto/auth_dto.py`**
 ```python
-# src/application/dto/auth_dto.py
 class AuthDto(BaseSchema):
     username: EmailStr = Field(examples=["johndoe@example.com"])
     password: str = Field(examples=["mysecretpassword"])
@@ -110,8 +110,8 @@ class AuthSuccessDto(BaseSchema):
 
 Some use cases need the currently authenticated user. In mdip-backend this is solved with a domain service that acts as a dependency:
 
+**`src/domain/services/auth_service.py`**
 ```python
-# src/domain/services/auth_service.py
 async def manager(security_scopes, token, session):
     user_repository = IUserRepository(session)
     access_token_service = IAccessTokenService(get_config().JWT_SECRET)

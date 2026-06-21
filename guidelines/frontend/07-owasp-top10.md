@@ -100,8 +100,8 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
+**`.env.local — never commit this file`**
 ```bash
-# .env.local — never commit this file
 NEXT_PUBLIC_API_URL=https://api.yourapp.com   # safe: intentionally client-visible
 JWT_SECRET=...                                 # NEVER add NEXT_PUBLIC_ prefix to secrets
 DATABASE_URL=...                               # server-only

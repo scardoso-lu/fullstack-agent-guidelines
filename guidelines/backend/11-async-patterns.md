@@ -28,8 +28,8 @@ The event loop runs one coroutine at a time. When a coroutine hits an `await`, i
 
 The session lifecycle is managed with `@asynccontextmanager`:
 
+**`src/infrastructure/db/engine.py`**
 ```python
-# src/infrastructure/db/engine.py
 from contextlib import asynccontextmanager
 
 @asynccontextmanager

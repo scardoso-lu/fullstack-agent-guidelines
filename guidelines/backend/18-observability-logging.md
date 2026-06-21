@@ -29,8 +29,8 @@ A single app-wide `Logger` class, instantiated at boot from the loaded config an
 
 ## Setup at boot
 
+**`src/api_main.py`**
 ```python
-# src/api_main.py
 from src.shared.observability import Logger, configure_root_logger
 
 def create_app(config: Config) -> FastAPI:
@@ -42,8 +42,8 @@ def create_app(config: Config) -> FastAPI:
     return app
 ```
 
+**`src/shared/observability/logger.py`**
 ```python
-# src/shared/observability/logger.py
 import logging
 import structlog
 from typing import Any
@@ -75,8 +75,8 @@ class Logger:
 
 ## Inject into use-cases
 
+**`src/application/use_cases/auth/login.py`**
 ```python
-# src/application/use_cases/auth/login.py
 from src.application.dto.auth_dto import AuthTokenDto, LoginDto
 from src.auth.exc import InvalidCredentialsError
 from src.infrastructure.repositories.contract import UserRepositoryInterface

@@ -52,8 +52,8 @@ class CreateOrderUseCase(WriteUseCase):
 
 The corresponding repository method (lives in infrastructure, per `backend/04-infrastructure-layer`):
 
+**`src/infrastructure/repositories/order_repository.py`**
 ```python
-# src/infrastructure/repositories/order_repository.py
 from sqlalchemy.dialects.postgresql import insert
 
 class OrderRepository(OrderRepositoryInterface):
@@ -93,8 +93,8 @@ Prefer this when the client can supply a natural ID. Many systems can — paymen
 
 When the operation has no natural key (a new payment with no client-side ID, an action that triggers side-effects, a multi-row create), the client sends an `Idempotency-Key` header (a UUID), and the server caches the result keyed by it.
 
+**`src/shared/idempotency.py`**
 ```python
-# src/shared/idempotency.py
 from datetime import datetime, timedelta
 from sqlalchemy import select
 
@@ -135,8 +135,8 @@ class IdempotencyStore:
         await self.session.flush()           # per backend/04: flush in repo/store, commit in session ctx
 ```
 
+**`src/payments/api.py`**
 ```python
-# src/payments/api.py
 from typing import Annotated
 from fastapi import Depends, Header
 
@@ -212,8 +212,8 @@ This is a contract violation — the client is using the key wrong. Returning th
 
 You don't control the sender's retry behavior. They will redeliver. The sender always provides a unique event ID — Stripe `event.id`, GitHub `X-GitHub-Delivery`, Slack `X-Slack-Request-Timestamp` plus signature. Use it.
 
+**`src/webhooks/payments_router.py`**
 ```python
-# src/webhooks/payments_router.py
 from typing import Annotated
 from fastapi import Body, Depends, Header, Response
 

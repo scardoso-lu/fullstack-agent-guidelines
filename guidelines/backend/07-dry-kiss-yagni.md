@@ -15,8 +15,8 @@ Extract duplication when the same *concept* appears more than twice and changes 
 
 **Good DRY — `BaseSchema` shared across all DTOs:**
 
+**`src/application/dto/__init__.py (from mdip-backend)`**
 ```python
-# src/application/dto/__init__.py (from mdip-backend)
 class BaseSchema(BaseModel):
     model_config = ConfigDict(
         use_enum_values=True,

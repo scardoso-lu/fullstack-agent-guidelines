@@ -19,8 +19,8 @@ What does NOT belong here: imports from `fastapi`, `sqlalchemy.orm`, `infrastruc
 
 ## SQLAlchemy Entity Pattern
 
+**`src/domain/entities/note.py`**
 ```python
-# src/domain/entities/note.py
 import sqlalchemy as sq
 from sqlalchemy.orm import Mapped, mapped_column
 from src.infrastructure.db.base import Base, IdMixin, generate_snowflake_id
@@ -57,8 +57,8 @@ Key points:
 
 The project uses 64-bit Snowflake IDs (not UUIDs):
 
+**`src/infrastructure/db/base.py`**
 ```python
-# src/infrastructure/db/base.py
 from functools import lru_cache
 from snowflake import SnowflakeGenerator
 
@@ -76,8 +76,8 @@ Snowflake IDs are **sortable by creation time**, fit in a `BigInteger` column, a
 
 Use `@dataclass(frozen=True)` for objects that have no identity — equality is structural, not by reference.
 
+**`src/domain/entities/guideline.py`**
 ```python
-# src/domain/entities/guideline.py
 from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
@@ -96,8 +96,8 @@ class Guideline:
 
 Domain-specific behavior like password hashing belongs on the entity, not in a service or route:
 
+**`src/domain/entities/user.py (from mdip-backend)`**
 ```python
-# src/domain/entities/user.py (from mdip-backend)
 import bcrypt
 
 class User(Base):

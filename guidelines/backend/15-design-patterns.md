@@ -254,8 +254,8 @@ Adding a new side effect (e.g., log to analytics) requires zero changes to the u
 
 FastAPI middleware is a Chain of Responsibility. Each middleware handles a request, optionally modifies it, and passes it to the next:
 
+**`src/presentation/middleware/request_id.py`**
 ```python
-# src/presentation/middleware/request_id.py
 import uuid
 from fastapi import Request
 
