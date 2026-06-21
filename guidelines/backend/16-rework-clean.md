@@ -1,17 +1,18 @@
-# Rework Clean — Write Only What the Task Needs
+# Write Only What the Task Needs
 
 > "The best code is the code you never wrote."
 
-Use when reworking a feature or asked to simplify over-built code. Covers the six-rung decision ladder, the ponytail: comment convention, and anti-patterns for backwards-compatibility accumulation.
+Applies to all code — new features, targeted fixes, and changes to existing code. Covers the six-rung decision ladder, the ponytail: comment convention, and anti-patterns for over-building and backwards-compatibility accumulation.
 
 AI agents over-build. Given a task, they install dependencies, create wrapper classes, add configuration layers, and preserve old implementations "for safety." The result is 5× more code than necessary, slower execution, and a codebase the user can no longer navigate.
 
-This guideline addresses two failure modes that compound each other:
+This guideline addresses three failure modes that compound each other:
 
 1. **Over-building new features** — writing a generalized abstraction when a specific function would do
-2. **Backwards-compatibility accumulation during reworks** — keeping old code alongside new code when the user has explicitly narrowed the requirement
+2. **Over-touching existing code** — refactoring, cleaning, or "improving" code adjacent to the task when only a targeted change was asked for
+3. **Backwards-compatibility accumulation during reworks** — keeping old code alongside new code when the user has explicitly narrowed the requirement
 
-The user narrows the concept → the agent widens the implementation. This is the core problem.
+The task is narrow → the implementation must be equally narrow. This is the core principle.
 
 ---
 
@@ -65,6 +66,51 @@ def find_drug_by_inn(drugs: list[Drug], inn: str) -> Drug | None:
 ```
 
 This makes the trade-off visible and the upgrade path explicit, without adding premature complexity now.
+
+---
+
+## Over-Touching Existing Code
+
+A bug fix fixes the bug. A config change changes the config. A one-line rename renames one thing. The task scope is the change scope — nothing else.
+
+Agents routinely do more than asked: rename surrounding variables "for clarity," extract helpers "while they're in there," reformat files, upgrade related patterns. Every untasked touch is:
+
+- A diff that obscures the real change
+- A potential regression in working code
+- Work the user did not ask for and cannot easily review
+
+### Anti-pattern: Cleanup While Fixing
+
+```python
+# Task: fix the off-by-one error in pagination
+# ❌ WRONG — agent fixes the bug AND refactors surrounding code
+class DrugRepository:
+    # Renamed from get_drugs_paginated (agent preferred shorter name)
+    async def get_paged(
+        self,
+        page: int,
+        size: int,
+    ) -> list[Drug]:
+        offset = (page - 1) * size  # bug fixed here
+        # Agent also rewrote the query, added type hints, removed "unnecessary" blank lines
+        return (await self._session.execute(
+            select(Drug).offset(offset).limit(size)
+        )).scalars().all()
+```
+
+```python
+# ✅ CORRECT — one change, nothing else touched
+async def get_drugs_paginated(self, page: int, size: int) -> list[Drug]:
+    offset = (page - 1) * size  # was (page) * size — fixed
+    result = await self._session.execute(
+        select(Drug).offset(offset).limit(size)
+    )
+    return result.scalars().all()
+```
+
+### Rule
+
+Change exactly what the task describes. Leave everything else exactly as it was — including formatting, naming, and structure you personally dislike. If you notice a separate problem, flag it in your reply; do not fix it silently.
 
 ---
 
@@ -201,6 +247,7 @@ Adapted from the Lazy Senior Developer principle:
 - **Deletion over addition**
 - **Boring over clever**
 - **Minimize file count** — the correct number of files is the minimum that keeps concerns separated
+- **Touch only what the task requires** — do not rename, reformat, or refactor adjacent code
 - **When a requirement is narrowed, the code is narrowed** — not kept broad "for compatibility"
 - **No TODO: remove old implementation** — remove it now, or don't merge
 
@@ -210,6 +257,7 @@ Adapted from the Lazy Senior Developer principle:
 
 - [ ] Decision ladder walked before writing anything: does this need to exist? stdlib? platform? installed? one line?
 - [ ] `ponytail:` comment added for any deliberate simplification with a known upgrade path
+- [ ] Only code required by the task was changed — no adjacent renames, reformats, or refactors
 - [ ] Reworked function replaces the old one — no parallel versions in the same codebase
 - [ ] Old function deleted; all call sites updated before merging
 - [ ] No feature flags with both `True` and `False` paths active simultaneously

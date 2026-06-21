@@ -1,17 +1,18 @@
-# Rework Clean — Write Only What the Task Needs
+# Write Only What the Task Needs
 
 > "The best code is the code you never wrote."
 
-Use when reworking a component, hook, or service. Covers the decision ladder, ponytail: comment convention, and anti-patterns — deprecated props, v2 components, stale React Query keys, optional Zod fields.
+Applies to all code — new components, targeted fixes, and changes to existing code. Covers the decision ladder, ponytail: comment convention, and anti-patterns — deprecated props, v2 components, stale React Query keys, optional Zod fields.
 
 AI agents over-build. Given a task, they install packages, create wrapper components, add compatibility layers, and preserve old implementations "for safety." The result is 5× more code than necessary, slower builds, and a component tree the user can no longer navigate.
 
-This guideline addresses two failure modes that compound each other:
+This guideline addresses three failure modes that compound each other:
 
 1. **Over-building new features** — writing a generic abstraction when a specific component or hook would do
-2. **Backwards-compatibility accumulation during reworks** — keeping old code alongside new code when the user has explicitly narrowed the requirement
+2. **Over-touching existing code** — refactoring, cleaning, or "improving" code adjacent to the task when only a targeted change was asked for
+3. **Backwards-compatibility accumulation during reworks** — keeping old code alongside new code when the user has explicitly narrowed the requirement
 
-The user narrows the concept → the agent widens the implementation. This is the core problem.
+The task is narrow → the implementation must be equally narrow. This is the core principle.
 
 ---
 
@@ -67,6 +68,55 @@ const filtered = drugs.filter((d) =>
 ```
 
 This makes the trade-off visible and the upgrade path explicit, without adding premature complexity now.
+
+---
+
+## Over-Touching Existing Code
+
+A bug fix fixes the bug. A prop rename renames the prop. A style tweak changes the style. The task scope is the change scope — nothing else.
+
+Agents routinely do more than asked: rename surrounding variables "for clarity," extract hooks "while they're in there," reformat JSX, upgrade adjacent patterns. Every untasked touch is:
+
+- A diff that obscures the real change
+- A potential regression in working code
+- Work the user did not ask for and cannot easily review
+
+### Anti-pattern: Cleanup While Fixing
+
+```tsx
+// Task: fix the loading state not showing on the drug list
+// ❌ WRONG — agent fixes the bug AND restructures the component
+export function DrugList({ drugs, isLoading }: DrugListProps) {
+  // Agent also: renamed drugList → drugs, extracted DrugListItem component,
+  // added key prop comment, reformatted JSX, removed "unnecessary" fragment
+  if (isLoading) return <Spinner />;  // bug fixed here
+  return (
+    <ul>
+      {drugs.map((drug) => (
+        <DrugListItem key={drug.id} drug={drug} />  // extracted by agent, not requested
+      ))}
+    </ul>
+  );
+}
+```
+
+```tsx
+// ✅ CORRECT — one change, nothing else touched
+export function DrugList({ drugList, loading }: DrugListProps) {
+  if (loading) return <Spinner />;  // was missing — added
+  return (
+    <ul>
+      {drugList.map((drug) => (
+        <li key={drug.id}>{drug.inn}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Rule
+
+Change exactly what the task describes. Leave everything else exactly as it was — including formatting, naming, and structure you personally dislike. If you notice a separate problem, flag it in your reply; do not fix it silently.
 
 ---
 
@@ -271,6 +321,7 @@ Adapted from the Lazy Senior Developer principle:
 - **Deletion over addition**
 - **Boring over clever**
 - **Minimize file count** — the correct number of files is the minimum that keeps concerns separated
+- **Touch only what the task requires** — do not rename, reformat, or refactor adjacent code
 - **When a requirement is narrowed, the component is narrowed** — not kept broad "for compatibility"
 - **No TODO: remove old component** — remove it now, or don't merge
 
@@ -280,6 +331,7 @@ Adapted from the Lazy Senior Developer principle:
 
 - [ ] Decision ladder walked before writing anything: does this need to exist? browser native? React native? installed? one component?
 - [ ] `ponytail:` comment added for any deliberate simplification with a known upgrade path
+- [ ] Only code required by the task was changed — no adjacent renames, reformats, or refactors
 - [ ] Reworked component replaces the old one in the same commit — no parallel versions
 - [ ] Deprecated props removed; all call sites updated before merging
 - [ ] No `useNewVersion?: boolean` flags — pick one implementation and delete the other
