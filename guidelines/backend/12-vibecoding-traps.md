@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Vibecoding Traps: What Not to Ask AI to Do Blindly
 
 Use before accepting AI-generated code. Lists eight common AI mistakes — fat routes, missing interfaces, god use cases, swallowed errors, hardcoded secrets — with the corrective prompt template for each.

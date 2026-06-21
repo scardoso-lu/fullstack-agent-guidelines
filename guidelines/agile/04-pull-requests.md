@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Pull Requests — One Slice, One Reviewable PR
 
 Use when opening a PR for a finished slice, or when writing the PR template the team uses. Defines the PR template (summary, type, included changes, testing, checklist), the rule "one slice = one PR", the rebase-not-merge default, and the convention that draft PR bodies live as git-ignored `*.pr.md` files until the PR is created.

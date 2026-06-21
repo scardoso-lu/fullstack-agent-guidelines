@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Performance — `next/image`, `next/font`, Dynamic Imports, Bundle Hygiene
 
 Use when adding an image, importing a font, importing a heavy library, or reviewing a route whose bundle has grown. Defines the **`next/image` + `next/font` defaults**, when to `dynamic()` an import (and when not to), how to read the Next.js build output to spot bundle bloat, and the four Core-Web-Vitals levers that matter: **LCP, CLS, INP, TTFB**.

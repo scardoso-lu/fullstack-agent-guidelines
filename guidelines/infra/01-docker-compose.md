@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Docker Compose — Full-Stack Project Setup
 
 Use when running both stacks together locally or in production, setting up per-stack environment files, or configuring service dependencies and health checks. Covers the two-service compose layout, `env_file` per stack, internal networking by service name, health checks, and the dev override pattern.

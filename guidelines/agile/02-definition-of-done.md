@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Definition of Done — The Gate Every Slice Crosses
 
 Use at the end of every slice, before merging the PR. Defines the exact set of checks that determine whether a slice is shippable: lint, format, type-check, unit + integration + E2E tests, coverage, audit-on-write, authorization checks, security verification, and documentation/diagram freshness. Anything not on the list is not part of DoD; everything on the list is a hard gate.

@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Testing in Docker — Running Tests from Outside the Container
 
 Use when an agent needs to run the test suite, check CI status locally, or read test output. Covers the Dockerfile `test` stage, `docker-compose.test.yml`, the agent-facing shell commands, and the `test-results/` volume pattern for structured output.

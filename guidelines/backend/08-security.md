@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Security Patterns: JWT, Passwords, and Secrets
 
 Use when handling passwords, tokens, or environment secrets. Covers bcrypt hashing in entity setters, HS256 JWT generation and validation, pydantic-settings with no-default secrets, and the OAuth2 Bearer dependency pattern.

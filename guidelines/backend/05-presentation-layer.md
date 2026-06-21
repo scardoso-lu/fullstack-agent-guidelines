@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Presentation Layer: FastAPI Routes
 
 Use when writing a FastAPI route or MCP tool handler. Covers the thin-layer rule (≤10 lines), response_model enforcement, Depends() injection, domain-error-to-HTTP mapping, and correct status codes.

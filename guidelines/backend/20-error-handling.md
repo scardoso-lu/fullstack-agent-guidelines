@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Error Handling — Exception Hierarchy, Wrapping, and Boundaries
 
 Use when designing a new module's exceptions, when catching a third-party library's error, or when reviewing a `try/except` block. Defines the **module-rooted exception hierarchy** (every module has one base class; every other exception in the module inherits from it), the rule for **wrapping vs leaking** third-party errors, the **never-swallow-silently** rule, and how exceptions map to HTTP at the edge of the system (in routes, not in use-cases).

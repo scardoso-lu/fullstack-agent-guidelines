@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Accessibility — Semantic HTML, ARIA, Focus, and Keyboard
 
 Use when building any UI component, when reviewing a vibecoded page, or when an existing screen has only ever been driven by a mouse. Defines the **semantic-HTML-first** rule (use `<button>`, `<a>`, `<label>`, `<nav>` — not `<div onclick>`), how ARIA *complements* (not replaces) semantic markup, the focus-management ruleset (visible focus, focus traps in modals, focus restore on close), and keyboard-navigation expectations. Aims at WCAG 2.2 AA — pragmatic, not ceremonial.

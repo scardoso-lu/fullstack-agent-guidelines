@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Technology Selection — Choosing Dependencies and Peripheral Tech
 
 Use when proposing a new dependency, a new container image, a new SaaS, or a new peripheral technology (task queue, vector store, cache, broker, observability stack). Defines the checklist every selection passes (need, alternatives, license, maintenance, security, fit) and the rule that **every adopted dependency is recorded** — no silent adoption.

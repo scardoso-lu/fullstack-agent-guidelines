@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Safe Migrations — Alembic, Online Schemas, and Backfills
 
 Use when authoring an Alembic migration, when reviewing a slice that changes the schema, or when planning a deploy that includes a migration. Defines the **safe-migration ruleset**: additive-first, no `NOT NULL` on populated tables without a default, no destructive change in the same release as the code that depends on it, the **expand → migrate → contract** pattern, batch backfills, and how to author migrations so a rollback never strands the system.

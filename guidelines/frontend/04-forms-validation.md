@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Forms and Validation — React Hook Form + Zod
 
 Use when building a form. Covers the Zod schema → TypeScript type → zodResolver pattern, mapping server errors back to fields, cross-field validation with .refine(), and root-level error display for non-field API errors.

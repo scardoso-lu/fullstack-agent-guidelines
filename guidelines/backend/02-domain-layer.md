@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Domain Layer: Entities and Value Objects
 
 Use when creating or modifying a domain entity or value object. Covers SQLAlchemy ORM entities, frozen dataclass value objects, password hashing in setters, Snowflake IDs, and the _mock() factory pattern for tests.

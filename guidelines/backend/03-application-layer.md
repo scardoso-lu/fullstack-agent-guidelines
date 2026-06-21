@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Application Layer: Use Cases and DTOs
 
 Use when writing a use case or DTO. Covers one-file-one-operation structure, constructor injection, BaseSchema config, input validation in execute(), and the rule that use cases always return DTOs, never ORM entities.

@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Server Actions — Auth, Validation, Revalidation, and Errors
 
 Use when adding a mutation in a Next.js App Router project. Defines when to reach for a Server Action vs a Route Handler, the **non-negotiable inside-the-action checklist** (auth re-check, input validation, audit, no leaking server errors), the `revalidateTag` / `revalidatePath` semantics, the **return-errors-don't-throw** pattern for `useFormState`, and progressive enhancement.

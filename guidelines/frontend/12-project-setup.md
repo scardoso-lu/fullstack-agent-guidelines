@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Node.js Project Setup — Docker + Next.js
 
 Use when creating the frontend Dockerfile, configuring npm to block postinstall scripts, or adding new npm packages. Covers Node.js 22 alpine, `.npmrc` with `ignore-scripts`, multi-stage Next.js build with standalone output, and non-root user.

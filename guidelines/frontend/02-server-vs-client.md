@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Server vs Client Components
 
 Use when deciding whether a component needs "use client". Covers the default-Server-Component model, when each type is appropriate, and the Server→Client composition pattern for interactive sub-components.

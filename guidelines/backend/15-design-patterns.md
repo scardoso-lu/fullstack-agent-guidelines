@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Design Patterns for SaaS Backends
 
 Use when designing a service, adapter, or cross-cutting infrastructure component. Covers Singleton (lru_cache), Factory Method, Repository, Strategy, Observer, and Command patterns with FastAPI/SQLAlchemy examples.

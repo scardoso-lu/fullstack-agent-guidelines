@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Idempotency — Retry-Safe Writes, Keys, and Deduplication
 
 Use when designing any POST endpoint that may be retried (payments, webhooks, bulk-job enqueues, user-triggered actions over flaky networks), when integrating a webhook receiver, or when a write must survive client retries without double-effect. Defines the **idempotency key** pattern (client-supplied `Idempotency-Key` header, server-stored result, replay on duplicate), the **at-most-once** vs **at-least-once** distinction, the **idempotent-by-design** alternative (UPSERT, natural keys), and how to make webhook consumers safe.

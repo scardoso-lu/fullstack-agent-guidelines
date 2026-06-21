@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Database Design: OLTP and Normalization
 
 Use when designing a database schema, adding a new table, or writing a migration. Covers OLTP normalization, foreign key constraints, indexing strategy, and common schema mistakes that cause N+1 queries.

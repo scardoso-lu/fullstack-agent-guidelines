@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # API Pagination — Cursor, Offset, and Response Envelopes
 
 Use when designing any list endpoint, when reviewing a route that returns a collection, or when an existing endpoint is paginating differently from the rest of the API. Defines the **default**: cursor-based pagination for everything user-facing, with a stable response envelope, capped `page_size`, and a documented sort/filter convention. Covers when offset pagination is acceptable (admin-only, small datasets), the bug patterns it produces on large data, and how to keep all list endpoints **shaped the same way** so clients aren't bespoke per endpoint.

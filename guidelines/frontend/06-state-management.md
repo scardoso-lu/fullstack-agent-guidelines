@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # State Management — Where Server, Global UI, URL, and Local State Live
 
 Use when choosing where to store a piece of state in a Next.js App Router app. Covers the four buckets — **server state stays on the server** (Server Components + Server Actions, *not* a client cache), Context (global client UI), URL params via `nuqs` (shareable state), `useState` (local) — and the rule for when each applies.
