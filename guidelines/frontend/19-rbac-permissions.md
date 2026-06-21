@@ -76,10 +76,10 @@ The JWT carries only the user id and role slug (see `backend/26-rbac-permissions
 
 All API calls live in `src/services/` as a `PascalCase` service object (see `frontend/03-data-fetching`). A standalone `fetchMe()` function or a `lib/api/me.ts` file both violate this rule.
 
+`MeService.fetch()` is called exclusively from a Server Component (the root layout). `authApi()` from `frontend/03-data-fetching` reads the token via `Cookies.get()` from `js-cookie` — a browser-only library that has no access to the incoming request cookies on the server. The service therefore accepts the token explicitly so the caller can supply it from `cookies()` (Next.js server API):
+
 **`src/services/me.ts`**
 ```ts
-import { authApi } from "./api";
-
 export type CurrentUser = {
   id: number;
   email: string;
@@ -88,8 +88,15 @@ export type CurrentUser = {
 };
 
 export const MeService = {
-  async fetch(): Promise<CurrentUser> {
-    const res = await authApi<CurrentUser>(`${process.env.NEXT_PUBLIC_API_URL}/me`);
+  async fetch(token: string): Promise<CurrentUser> {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/me`, {
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) throw new Error("Unauthenticated");
     return res.json();
   },
 };
@@ -145,17 +152,20 @@ export function usePermission() {
 }
 ```
 
-`CurrentUser` is fetched once in the root layout (Server Component) and passed to the provider. `PermissionProvider` wraps inside the existing `UserProvider` from `frontend/05-authentication` — it does not replace it:
+`CurrentUser` is fetched once in the root layout (Server Component) and passed to the provider. The token is read from the incoming request using Next.js's `cookies()` from `next/headers` — the only way to access cookies server-side — and passed to `MeService.fetch()`. `PermissionProvider` wraps inside the existing `UserProvider` from `frontend/05-authentication` — it does not replace it:
 
 **`src/app/layout.tsx`**
 ```tsx
+import { cookies } from "next/headers";
 import { UserProvider } from "@/providers/user-provider";
 import { PermissionProvider } from "@/providers/permission-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { MeService } from "@/services/me";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await MeService.fetch().catch(() => null);
+  const cookieStore = await cookies();
+  const token = cookieStore.get("x-access-token")?.value;
+  const user = token ? await MeService.fetch(token).catch(() => null) : null;
   return (
     <html>
       <body>
@@ -196,35 +206,40 @@ When an admin creates a new "senior_editor" role via the admin UI and grants it 
 
 Middleware runs on the server before the page renders. It is the correct place to redirect unauthenticated or unauthorised users — not a client-side component.
 
-Use the same helpers and cookie name as `frontend/05-authentication`: `isTokenExpired` from `@/lib/jwt`, cookie `"x-access-token"`, and a synchronous `middleware` function. For the admin-only role check, decode the token with `jwtDecode` — extend `JwtPayload` locally to include `role`.
+Middleware uses `jose`'s `jwtVerify` instead of `jwtDecode`. `jwtDecode` (used in `frontend/05-authentication` for client-side expiry checks) does **not** verify the token signature — a user can forge a cookie with any `role` and a future `exp`. `jwtVerify` covers both signature and expiry in one call and runs in Edge Runtime via the Web Crypto API. `JWT_SECRET` is a server-only env var (no `NEXT_PUBLIC_` prefix).
 
 **`src/middleware.ts`**
 ```ts
 import { NextRequest, NextResponse } from "next/server";
-import { jwtDecode } from "jwt-decode";
-import { isTokenExpired } from "@/lib/jwt";
+import { jwtVerify } from "jose";
 
-type JwtPayload = { sub: string; exp: number; role?: string };
+type JwtPayload = { sub: string; role?: string };
 
+const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 const PROTECTED = /^\/(dashboard|admin|settings)(\/|$)/;
 const ADMIN_ONLY = /^\/admin(\/|$)/;
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("x-access-token")?.value;
 
   if (PROTECTED.test(pathname)) {
-    if (!token || isTokenExpired(token)) {
+    if (!token) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // Admin routes: decode role slug for the fast route-level gate.
+    let payload: JwtPayload;
+    try {
+      ({ payload } = await jwtVerify<JwtPayload>(token, secret));
+    } catch {
+      // covers expired, malformed, and forged tokens
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    // Admin routes: check role slug from the verified JWT for the fast gate.
     // The API enforces permissions on every data request regardless.
-    if (ADMIN_ONLY.test(pathname)) {
-      const payload = jwtDecode<JwtPayload>(token);
-      if (payload.role !== "admin") {
-        return NextResponse.redirect(new URL("/403", request.url));
-      }
+    if (ADMIN_ONLY.test(pathname) && payload.role !== "admin") {
+      return NextResponse.redirect(new URL("/403", request.url));
     }
   }
 
@@ -246,7 +261,7 @@ Extract the visibility pattern into a single reusable component so permission ch
 ```tsx
 "use client";
 
-import { usePermission } from "@/lib/auth/permission-context";
+import { usePermission } from "@/providers/permission-provider";
 
 type Props = {
   permission?: string;
@@ -308,12 +323,15 @@ Never write code that assumes a hidden button is a protected action.
 - [ ] No `process.env.NEXT_PUBLIC_*` variable holds role names or permission strings
 - [ ] No `user.role === "admin"` checks scattered across components — use `can()` or `<PermissionGate>`
 - [ ] No permission or role data stored in `localStorage` or client-set cookies
-- [ ] Permissions come from `/me` API response via `MeService.fetch()` in `src/services/me.ts`, not from the JWT payload directly
+- [ ] Permissions come from `/me` API response via `MeService.fetch(token)` in `src/services/me.ts`, not from the JWT payload directly
+- [ ] `MeService.fetch()` accepts an explicit token — it does not call `authApi()` (browser-only cookie reader) for a server-side call
+- [ ] Root layout reads the token via `cookies()` from `next/headers` and passes it to `MeService.fetch(token)`
 - [ ] `MeService` follows the service object convention from `frontend/03-data-fetching` — no standalone `fetchMe()` function
 - [ ] `PermissionProvider` lives in `src/providers/` alongside `UserProvider` from `frontend/05-authentication`
 - [ ] `PermissionProvider` wraps inside the existing `UserProvider` — does not replace it
 - [ ] A single `usePermission()` hook is the only place components read permission state
-- [ ] Middleware uses `isTokenExpired` from `@/lib/jwt`, cookie `"x-access-token"`, and a synchronous `function middleware` — matching `frontend/05-authentication`
+- [ ] Middleware uses `jwtVerify` from `jose` (signature + expiry verified), not `jwtDecode` (decode-only, bypassable by forged cookies)
+- [ ] `JWT_SECRET` is a server-only env var in middleware — no `NEXT_PUBLIC_` prefix
 - [ ] `<PermissionGate>` wraps conditional UI — no inline ternaries checking role strings
 - [ ] The frontend never treats its own permission checks as security enforcement
 - [ ] See `backend/26-rbac-permissions` for the API-side enforcement pattern
