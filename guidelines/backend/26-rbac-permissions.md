@@ -259,18 +259,9 @@ class DeleteArticleUseCase:
         await self._repo.delete(article_id)
 ```
 
-### 6 — Frontend Hides UI; Never Enforces Security
+The frontend permission pattern (route guards, permission hooks, UI visibility) is covered in `frontend/19-rbac-permissions`.
 
-The frontend reads the role slug from `/me` and uses it to show or hide UI elements. This is user experience, not access control.
-
-```tsx
-// ✅ hide for UX — security is enforced server-side regardless
-{user.role === "admin" || user.role === "editor" ? (
-  <DeleteButton articleId={article.id} />
-) : null}
-```
-
-### 7 — Admin UI Manages Everything at Runtime
+### 6 — Admin UI Manages Everything at Runtime
 
 The admin UI must provide full control over the RBAC system without any code changes or redeployments:
 
@@ -302,6 +293,6 @@ Protecting a new endpoint always requires code because the endpoint itself is co
 - [ ] JWT contains `role` slug only — permissions are fetched fresh from DB on every request
 - [ ] Every protected route uses `Depends(require_permission("slug"))`
 - [ ] Use cases re-check permissions when ownership or business context is involved
-- [ ] Frontend hides elements based on role but makes no security decisions
 - [ ] Admin UI exists to manage permissions, roles, assignments, and user role assignment at runtime
 - [ ] A seed migration populates initial permissions and role-permission assignments
+- [ ] See `frontend/19-rbac-permissions` for frontend route guards and UI visibility patterns

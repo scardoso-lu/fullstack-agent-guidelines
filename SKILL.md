@@ -5,7 +5,7 @@ description: |
 
   TRIGGER on vibecoder requests: add login, sign up, forgot password, save to database, show a list, search, filter, paginate, form, edit profile, dashboard, admin page, upload files, send email, notifications, redesign, responsive, dark mode, accessibility, make it faster, fix error, crashes, deploy, Vercel, payments, Stripe, checkout, roles, permissions, categories, statuses, dropdown options, types, add a new option, rename a status, feature flag, runtime settings, settings page, env file, hardcoded list, restrict access, admin only, who can do this, access control.
 
-  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done, reference data, lookup table, enum in domain, configuration layers, env vars, hardcoded enum, app_config, RBAC, require_permission, role-based, permission check, allowed groups.
+  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done, reference data, lookup table, enum in domain, configuration layers, env vars, hardcoded enum, app_config, RBAC, require_permission, role-based, permission check, allowed groups, PermissionGate, usePermission, route guard, permission hook.
 
   Primes the agent to fetch the right guideline from the MCP server instead of inventing patterns from training data.
 ---
@@ -34,7 +34,7 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | "add a category" / "dropdown options" / "status list" / "document types" / "users want to add options" / "hardcoded list" / "rename a status" | `backend/25-reference-data`, `frontend/04-forms-validation` |
 | "dashboard" / "admin page" / "stats" | `frontend/02-server-vs-client`, `frontend/03-data-fetching`, `frontend/14-loading-error-empty-states`, `backend/24-configuration-layers`, `backend/25-reference-data` |
 | "send an email when..." / "notify when..." / "webhook" | `backend/11-async-patterns`, `backend/22-idempotency` |
-| "different roles" / "admins vs users" / "permissions" / "restrict access" / "admin only" / "who can do this" | `backend/26-rbac-permissions`, `backend/13-owasp-top10`, `backend/19-audit-on-write`, `frontend/05-authentication` |
+| "different roles" / "admins vs users" / "permissions" / "restrict access" / "admin only" / "who can do this" / "hide this button" / "show only to admins" | `backend/26-rbac-permissions`, `frontend/19-rbac-permissions`, `backend/13-owasp-top10`, `backend/19-audit-on-write` |
 | "make it look nicer" / "redesign" / "modern" | `frontend/01-project-structure` (shadcn), `frontend/14-loading-error-empty-states`, `frontend/15-accessibility` |
 | "mobile friendly" / "responsive" / "dark mode" | `frontend/15-accessibility`, `frontend/18-performance` (`prefers-reduced-motion`, viewport handling) |
 | "this is slow" / "make it faster" / "the page lags" | `frontend/18-performance`, `frontend/03-data-fetching`, `backend/10-tech-debt`, `backend/21-api-pagination` |
