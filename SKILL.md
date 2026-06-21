@@ -3,9 +3,9 @@ name: dev-guidelines
 description: |
   Consult the Fullstack Guidelines MCP server BEFORE generating code for any web-app feature — Python/FastAPI backend, Next.js frontend. Auto-invoke when the user describes WHAT they want in everyday product language, not just developer jargon.
 
-  TRIGGER on vibecoder requests: add login, sign up, forgot password, save to database, show a list, search, filter, paginate, form, edit profile, dashboard, admin page, upload files, send email, notifications, redesign, responsive, dark mode, accessibility, make it faster, fix error, crashes, deploy, Vercel, payments, Stripe, checkout, roles, permissions.
+  TRIGGER on vibecoder requests: add login, sign up, forgot password, save to database, show a list, search, filter, paginate, form, edit profile, dashboard, admin page, upload files, send email, notifications, redesign, responsive, dark mode, accessibility, make it faster, fix error, crashes, deploy, Vercel, payments, Stripe, checkout, roles, permissions, categories, statuses, dropdown options, types, add a new option, rename a status, feature flag, runtime settings, settings page, env file, hardcoded list.
 
-  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done.
+  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done, reference data, lookup table, enum in domain, configuration layers, env vars, hardcoded enum, app_config.
 
   Primes the agent to fetch the right guideline from the MCP server instead of inventing patterns from training data.
 ---
@@ -30,9 +30,11 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | "show a list" / "search" / "filter" / "sort" / "paginate" | `backend/21-api-pagination`, `frontend/03-data-fetching`, `frontend/14-loading-error-empty-states` |
 | "let users upload a file / photo / CSV" | `backend/13-owasp-top10` (file upload section), `frontend/04-forms-validation`, `frontend/16-server-actions` |
 | "form to..." / "edit profile" / "edit settings" | `frontend/04-forms-validation`, `frontend/16-server-actions` |
-| "dashboard" / "admin page" / "stats" | `frontend/02-server-vs-client`, `frontend/03-data-fetching`, `frontend/14-loading-error-empty-states` |
+| "runtime settings" / "settings page" / "env file" / "feature flag" / "where do secrets go" / "hardcoded config" | `backend/24-configuration-layers` |
+| "add a category" / "dropdown options" / "status list" / "document types" / "users want to add options" / "hardcoded list" / "rename a status" | `backend/25-reference-data`, `frontend/04-forms-validation` |
+| "dashboard" / "admin page" / "stats" | `frontend/02-server-vs-client`, `frontend/03-data-fetching`, `frontend/14-loading-error-empty-states`, `backend/24-configuration-layers`, `backend/25-reference-data` |
 | "send an email when..." / "notify when..." / "webhook" | `backend/11-async-patterns`, `backend/22-idempotency` |
-| "different roles" / "admins vs users" / "permissions" | `backend/13-owasp-top10`, `backend/19-audit-on-write` (permission strings), `frontend/05-authentication` |
+| "different roles" / "admins vs users" / "permissions" | `backend/13-owasp-top10`, `backend/19-audit-on-write` (permission strings), `frontend/05-authentication`, `backend/25-reference-data` (roles as a table) |
 | "make it look nicer" / "redesign" / "modern" | `frontend/01-project-structure` (shadcn), `frontend/14-loading-error-empty-states`, `frontend/15-accessibility` |
 | "mobile friendly" / "responsive" / "dark mode" | `frontend/15-accessibility`, `frontend/18-performance` (`prefers-reduced-motion`, viewport handling) |
 | "this is slow" / "make it faster" / "the page lags" | `frontend/18-performance`, `frontend/03-data-fetching`, `backend/10-tech-debt`, `backend/21-api-pagination` |
