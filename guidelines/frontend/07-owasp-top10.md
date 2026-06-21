@@ -29,16 +29,37 @@ export default function AdminPage() {
 }
 ```
 
-**Fixed — middleware enforces access before the page renders:**
+**Vulnerable — decoding without signature verification:**
+```ts
+// ❌ WRONG — decodeToken does not verify the JWT signature
+// A user can forge a cookie with role: "admin" and a future exp
+const payload = token ? decodeToken(token) : null;
+if (payload?.role !== "admin") return redirect("/login");
+```
+
+**Fixed — middleware verifies the signature before trusting any claim:**
 ```ts
 // src/middleware.ts
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get("x-access-token")?.value;
-  const payload = token ? decodeToken(token) : null;
+import { jwtVerify } from "jose";
 
-  // Server-side check — cannot be bypassed by the client
+// Fail closed: throw at module load so the edge function refuses to start
+// rather than silently verifying against an empty key.
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret) throw new Error("JWT_SECRET env var is not set");
+const secret = new TextEncoder().encode(rawSecret);
+
+export async function middleware(request: NextRequest) {
+  const token = request.cookies.get("x-access-token")?.value;
+
   if (request.nextUrl.pathname.startsWith("/admin")) {
-    if (!payload || payload.role !== "admin") {
+    if (!token) return NextResponse.redirect(new URL("/login", request.url));
+    try {
+      const { payload } = await jwtVerify<{ role?: string }>(token, secret);
+      if (payload.role !== "admin") {
+        return NextResponse.redirect(new URL("/403", request.url));
+      }
+    } catch {
+      // covers expired, malformed, and forged tokens
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }
@@ -46,7 +67,9 @@ export function middleware(request: NextRequest) {
 }
 ```
 
-Never render privileged content and hide it with CSS or a conditional — gate it at the network edge.
+`jwtVerify` from `jose` verifies the HMAC-SHA256 signature and expiry atomically and runs in Edge Runtime. `JWT_SECRET` is a server-only env var — never `NEXT_PUBLIC_`. Never render privileged content and hide it with CSS or a conditional — gate it at the network edge.
+
+For the full RBAC pattern — permission-based visibility, `<PermissionGate>`, and `usePermission()` hook — see `frontend/19-rbac-permissions`.
 
 ---
 
@@ -333,7 +356,9 @@ Every route segment should have an `error.tsx` boundary. The root `app/error.tsx
 
 ## Quick Checklist
 
-- [ ] Route protection is in `middleware.ts` — never only in the component
+- [ ] Route protection is in `middleware.ts` using `jwtVerify` (signature verified) — never `decodeToken` alone, never only in the component
+- [ ] `JWT_SECRET` is validated at module load before `TextEncoder().encode()` — missing secret throws rather than silently producing an empty key
+- [ ] Role-based UI visibility uses `<PermissionGate>` and `usePermission()` from `frontend/19-rbac-permissions` — never inline `user.role === "admin"` checks
 - [ ] Security headers set in `next.config.ts` (CSP, X-Frame-Options, HSTS, CORS)
 - [ ] `NEXT_PUBLIC_` prefix only on values intentionally visible to users — never on secrets
 - [ ] Tokens stored in `SameSite: Strict` cookies — never `localStorage`

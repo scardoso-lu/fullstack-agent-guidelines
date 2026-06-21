@@ -5,7 +5,7 @@ description: |
 
   TRIGGER on vibecoder requests: add login, sign up, forgot password, save to database, show a list, search, filter, paginate, form, edit profile, dashboard, admin page, upload files, send email, notifications, redesign, responsive, dark mode, accessibility, make it faster, fix error, crashes, deploy, Vercel, payments, Stripe, checkout, roles, permissions, categories, statuses, dropdown options, types, add a new option, rename a status, feature flag, runtime settings, settings page, env file, hardcoded list, restrict access, admin only, who can do this, access control.
 
-  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done, reference data, lookup table, enum in domain, configuration layers, env vars, hardcoded enum, app_config, RBAC, require_permission, role-based, permission check, allowed groups, PermissionGate, usePermission, route guard, permission hook.
+  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done, reference data, lookup table, enum in domain, configuration layers, env vars, hardcoded enum, app_config, RBAC, require_permission, role-based, permission check, allowed groups, PermissionGate, usePermission, route guard, permission hook, broken access control, JWT verify, jwtVerify, forged token, middleware security.
 
   Primes the agent to fetch the right guideline from the MCP server instead of inventing patterns from training data.
 ---
@@ -43,7 +43,7 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | "payments" / "Stripe" / "checkout" / "subscription" | `backend/22-idempotency` (key for retry safety), `backend/13-owasp-top10`, `frontend/16-server-actions` |
 | "let me change my mind / undo" | `backend/19-audit-on-write` (state transitions audited), `backend/14-database-design` (soft delete vs hard delete) |
 | "make this testable" / "add tests" / "playwright" | `backend/09-testing`, `frontend/17-component-testing`, `qa/02-e2e-per-feature` |
-| "code review this" / "is this OK?" | `qa/01-code-review`, `backend/13-owasp-top10`, `frontend/07-owasp-top10` |
+| "code review this" / "is this OK?" / "security review" / "is this secure?" | `qa/01-code-review`, `backend/13-owasp-top10`, `frontend/07-owasp-top10`, `frontend/19-rbac-permissions` |
 | "I'm starting a new feature" / "next ticket" / "PR" | `agile/01-vertical-slices`, `agile/02-definition-of-done`, `agile/03-conventional-commits`, `agile/04-pull-requests` |
 
 If none of the rows match, fall through to `get_metadata` and `search_guidelines` (see Step 2).
@@ -101,50 +101,6 @@ When you fetch a guideline, you are agreeing to follow it. Concretely:
 - **Fetching, then ignoring.** If you load a guideline into context and then write code that contradicts it, you wasted the fetch. Either follow it or explicitly justify the deviation.
 - **Citing the slug without following it.** Worse than not citing — it makes the PR description false.
 - **Lecturing the vibecoder about patterns.** They asked for a feature, not an architecture lesson. Apply the pattern; mention it in passing only if it changes the user-visible behavior they should know about ("I added password reset; the reset link expires after 30 minutes for security — let me know if you want a different timeout").
-
-## Setup — connect the server if it isn't already
-
-You can tell the server is connected when `get_metadata`, `list_guidelines`, etc. appear as available tools. If they don't:
-
-**Claude Code (CLI / IDE extension):**
-
-```bash
-claude mcp add fullstack-guidelines https://fullstack-agent-guidelines.vercel.app/mcp
-```
-
-Or add manually to `.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "fullstack-guidelines": {
-      "type": "http",
-      "url": "https://fullstack-agent-guidelines.vercel.app/mcp"
-    }
-  }
-}
-```
-
-Then `/mcp` (the built-in command) to reload — the tools appear.
-
-**claude.ai (web):** Settings → Integrations → Add integration → paste `https://fullstack-agent-guidelines.vercel.app/mcp`.
-
-**Codex / ChatGPT:** Settings → Connectors → Add → paste the same URL.
-
-If the user is on a different host or you're scripting from outside an MCP client, the endpoint is `POST https://fullstack-agent-guidelines.vercel.app/mcp` speaking standard MCP streamable-HTTP JSON-RPC.
-
-## Tool quick reference
-
-| Tool | Args | Returns |
-|---|---|---|
-| `health_check` | — | `{status, message}` |
-| `get_metadata` | — | Full catalog (guidelines + examples, lightweight). **Call first.** |
-| `list_guidelines` | `stack?: backend\|frontend\|agile\|qa\|architecture\|infra` | Slugs + titles + summaries + tags. |
-| `get_guideline` | `slug: str` | Full markdown of one guideline. |
-| `search_guidelines` | `query: str, stack?: str` | Slugs matching the query in title, content, or tags. |
-| `get_all_context` | `stack?: str` | Every guideline concatenated. Large. |
-| `list_examples` | `stack?, layer?` | Annotated code example index. |
-| `get_example` | `name: str` | Full annotated source of one example. |
 
 ## When NOT to use this skill
 
