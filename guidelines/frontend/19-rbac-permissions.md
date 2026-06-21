@@ -74,8 +74,12 @@ const { isAdmin } = useJwt();
 
 The JWT carries only the user id and role slug (see `backend/26-rbac-permissions`). The frontend fetches the current user's full permission list from a `/me` endpoint on load. This means permission changes made via the admin UI take effect for the user on their next page load — without a redeploy.
 
-**`lib/api/me.ts`**
+All API calls live in `src/services/` as a `PascalCase` service object (see `frontend/03-data-fetching`). A standalone `fetchMe()` function or a `lib/api/me.ts` file both violate this rule.
+
+**`src/services/me.ts`**
 ```ts
+import { authApi } from "./api";
+
 export type CurrentUser = {
   id: number;
   email: string;
@@ -83,23 +87,26 @@ export type CurrentUser = {
   permissions: string[];   // slugs: ["articles:read", "articles:write", ...]
 };
 
-export async function fetchMe(): Promise<CurrentUser> {
-  const res = await fetch("/api/me", { cache: "no-store" });
-  if (!res.ok) throw new Error("Unauthenticated");
-  return res.json();
-}
+export const MeService = {
+  async fetch(): Promise<CurrentUser> {
+    const res = await authApi<CurrentUser>(`${process.env.NEXT_PUBLIC_API_URL}/me`);
+    return res.json();
+  },
+};
 ```
 
 ### 2 — Permission Context with a Single Hook
 
 Centralise all permission logic in one place. Components never check `user.role` directly — they call `usePermission()`.
 
-**`lib/auth/permission-context.tsx`**
+Providers live in `src/providers/` (see `frontend/05-authentication` — `UserProvider` is at `src/providers/user-provider.tsx`). `PermissionProvider` follows the same convention.
+
+**`src/providers/permission-provider.tsx`**
 ```tsx
 "use client";
 
 import { createContext, useContext } from "react";
-import type { CurrentUser } from "@/lib/api/me";
+import type { CurrentUser } from "@/services/me";
 
 type PermissionContextValue = {
   user: CurrentUser | null;
@@ -138,21 +145,27 @@ export function usePermission() {
 }
 ```
 
-Load `CurrentUser` once in the root layout (Server Component) and pass it to the provider:
+`CurrentUser` is fetched once in the root layout (Server Component) and passed to the provider. `PermissionProvider` wraps inside the existing `UserProvider` from `frontend/05-authentication` — it does not replace it:
 
-**`app/layout.tsx`**
+**`src/app/layout.tsx`**
 ```tsx
-import { fetchMe } from "@/lib/api/me";
-import { PermissionProvider } from "@/lib/auth/permission-context";
+import { UserProvider } from "@/providers/user-provider";
+import { PermissionProvider } from "@/providers/permission-provider";
+import { QueryProvider } from "@/providers/query-provider";
+import { MeService } from "@/services/me";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await fetchMe().catch(() => null);
+  const user = await MeService.fetch().catch(() => null);
   return (
     <html>
       <body>
-        <PermissionProvider user={user}>
-          {children}
-        </PermissionProvider>
+        <QueryProvider>
+          <UserProvider>
+            <PermissionProvider user={user}>
+              {children}
+            </PermissionProvider>
+          </UserProvider>
+        </QueryProvider>
       </body>
     </html>
   );
@@ -183,31 +196,35 @@ When an admin creates a new "senior_editor" role via the admin UI and grants it 
 
 Middleware runs on the server before the page renders. It is the correct place to redirect unauthenticated or unauthorised users — not a client-side component.
 
-**`middleware.ts`**
+Use the same helpers and cookie name as `frontend/05-authentication`: `isTokenExpired` from `@/lib/jwt`, cookie `"x-access-token"`, and a synchronous `middleware` function. For the admin-only role check, decode the token with `jwtDecode` — extend `JwtPayload` locally to include `role`.
+
+**`src/middleware.ts`**
 ```ts
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth/jwt";
+import { jwtDecode } from "jwt-decode";
+import { isTokenExpired } from "@/lib/jwt";
+
+type JwtPayload = { sub: string; exp: number; role?: string };
 
 const PROTECTED = /^\/(dashboard|admin|settings)(\/|$)/;
 const ADMIN_ONLY = /^\/admin(\/|$)/;
 
-export async function middleware(request: NextRequest) {
-  const token = request.cookies.get("access_token")?.value;
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const token = request.cookies.get("x-access-token")?.value;
 
-  if (PROTECTED.test(request.nextUrl.pathname)) {
-    if (!token) {
+  if (PROTECTED.test(pathname)) {
+    if (!token || isTokenExpired(token)) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    const payload = await verifyToken(token).catch(() => null);
-    if (!payload) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    // Admin routes: check role slug from JWT for a quick gate.
-    // The API will enforce permissions on every data request regardless.
-    if (ADMIN_ONLY.test(request.nextUrl.pathname) && payload.role !== "admin") {
-      return NextResponse.redirect(new URL("/403", request.url));
+    // Admin routes: decode role slug for the fast route-level gate.
+    // The API enforces permissions on every data request regardless.
+    if (ADMIN_ONLY.test(pathname)) {
+      const payload = jwtDecode<JwtPayload>(token);
+      if (payload.role !== "admin") {
+        return NextResponse.redirect(new URL("/403", request.url));
+      }
     }
   }
 
@@ -291,9 +308,12 @@ Never write code that assumes a hidden button is a protected action.
 - [ ] No `process.env.NEXT_PUBLIC_*` variable holds role names or permission strings
 - [ ] No `user.role === "admin"` checks scattered across components — use `can()` or `<PermissionGate>`
 - [ ] No permission or role data stored in `localStorage` or client-set cookies
-- [ ] Permissions come from `/me` API response, not from the JWT payload directly
-- [ ] A single `usePermission()` hook is the only place components read auth state
-- [ ] Route protection is in `middleware.ts`, not in client components with redirects
+- [ ] Permissions come from `/me` API response via `MeService.fetch()` in `src/services/me.ts`, not from the JWT payload directly
+- [ ] `MeService` follows the service object convention from `frontend/03-data-fetching` — no standalone `fetchMe()` function
+- [ ] `PermissionProvider` lives in `src/providers/` alongside `UserProvider` from `frontend/05-authentication`
+- [ ] `PermissionProvider` wraps inside the existing `UserProvider` — does not replace it
+- [ ] A single `usePermission()` hook is the only place components read permission state
+- [ ] Middleware uses `isTokenExpired` from `@/lib/jwt`, cookie `"x-access-token"`, and a synchronous `function middleware` — matching `frontend/05-authentication`
 - [ ] `<PermissionGate>` wraps conditional UI — no inline ternaries checking role strings
 - [ ] The frontend never treats its own permission checks as security enforcement
 - [ ] See `backend/26-rbac-permissions` for the API-side enforcement pattern
