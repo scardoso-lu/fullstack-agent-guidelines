@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Observability — OpenTelemetry
 
 Use when adding tracing, metrics, or structured logging to either stack, or when wiring up an observability backend (Jaeger, Grafana Tempo, Honeycomb, Datadog). Covers the OTel Collector pattern, automatic instrumentation for FastAPI and SQLAlchemy, Next.js `instrumentation.ts`, custom spans on use case boundaries, and docker-compose integration.

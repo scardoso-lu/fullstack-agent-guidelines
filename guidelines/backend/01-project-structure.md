@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Project Structure and Layer Conventions
 
 Use when deciding where to put a new file or module. Defines the four-layer rule, the exact directory tree, naming conventions, and a file placement decision guide for every type of Python file.

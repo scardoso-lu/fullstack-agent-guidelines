@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Frontend Project Structure — Next.js 15 App Router
 
 Use when deciding where a new file belongs in a Next.js 15 App Router project. Covers the directory tree, route groups, the [lang] segment, and placement rules for components, hooks, services, and context.

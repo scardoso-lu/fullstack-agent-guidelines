@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # OWASP Top 10 2025 — Next.js and Web Application Edition
 
 Use when implementing auth, rendering user-provided content, or configuring security headers. Maps all ten OWASP Top 10 2025 risks to Next.js patterns — middleware access control, CSP, XSS via DOMPurify, and NEXT_PUBLIC_ rules.

@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Write Only What the Task Needs
 
 > "The best code is the code you never wrote."

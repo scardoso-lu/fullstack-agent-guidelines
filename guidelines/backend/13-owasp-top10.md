@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # OWASP Top 10 2025 — FastAPI Edition
 
 Use when implementing or reviewing auth, authorization, input handling, or error responses. Maps all ten OWASP Top 10 2025 risks to FastAPI/Python patterns with vulnerable and fixed code for each entry.

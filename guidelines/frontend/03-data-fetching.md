@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Data Fetching — Services, Server Components, and Server Actions
 
 Use when fetching or mutating data in a page or component. Covers the service layer (only services call fetch()), Server Component direct-await for reads, Server Actions for writes with tag-based revalidation, and the (rare) case where a Client Component genuinely needs to fetch (debounced search, polling).

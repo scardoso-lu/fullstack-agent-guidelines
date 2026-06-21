@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Code Review — A Reviewer's Checklist
 
 Use when reviewing a PR, when authoring code with future-review in mind, or when calibrating what the team's reviewers are expected to catch. Defines the **correctness-first** posture (does the code do what the ticket says?), the order in which a reviewer reads a diff, the categories of findings, and the etiquette that keeps review productive (severity-tagged comments, one round-trip per concern, no bikeshedding).

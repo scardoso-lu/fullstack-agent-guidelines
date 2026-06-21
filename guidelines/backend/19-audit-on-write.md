@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Audit-on-Write — The Hard Gate for Every Mutation
 
 Use when adding a use-case that writes (creates, updates, deletes, archives, mutates state), when reviewing such a slice, or when designing the base use-case / Unit of Work. Defines the **hard rule**: every write emits a structured audit event in the **same DB transaction** as the write — atomically, or neither. Defines the event schema, the base-use-case pattern that makes this automatic, the test that verifies it, and the DoD-blocking review check.

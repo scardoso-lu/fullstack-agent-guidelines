@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Makefile as the Gate — One Command Surface for Dev and CI
 
 Use when setting up a new repo's command surface, when the team's local commands have drifted from CI, or when an engineer asks "what's the command to run the gate locally?". Defines the **Makefile-as-portable-surface** pattern: every common operation gets a target, CI runs the same targets, and the Definition of Done gate (lint + format + type-check + tests + coverage) is reproducible with `make gate`.

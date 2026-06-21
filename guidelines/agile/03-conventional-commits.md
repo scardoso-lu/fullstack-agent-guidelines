@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Conventional Commits — One Commit per Checkpoint
 
 Use when committing changes inside a slice, when reviewing commit history, or when configuring commitlint / release automation. Defines the Conventional Commits format (type, scope, description, body, footer), the type catalogue, the breaking-change syntax, and the "incremental along the slice" commit cadence.

@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Infrastructure Layer: Repositories and Database
 
 Use when implementing a repository or managing SQLAlchemy sessions. Covers the contract.py interface pattern, async session lifecycle, flush vs commit, filesystem repositories, and Alembic migrations.

@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Recognizing and Managing Technical Debt
 
 Use when a codebase is drifting — fat routes, hardcoded values, logic leaking into repositories, or N+1 queries. Covers each code smell with its refactoring strategy and when NOT to refactor.

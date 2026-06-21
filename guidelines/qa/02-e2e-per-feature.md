@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # E2E-per-Feature — Every New Variant Gets a Playwright Walk
 
 Use when writing or reviewing tests for a slice with a user-facing change. Defines the **hard rule** that every new user-facing flow or rendered variant gets at least one Playwright E2E that opens the page, performs the action, and asserts the result *renders*, plus the rationale (unit/integration green is not sufficient — one per-action render crash will eventually ship if E2E never opens the page for the new state).

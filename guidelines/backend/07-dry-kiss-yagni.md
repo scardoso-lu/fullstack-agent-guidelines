@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # DRY, KISS, YAGNI — When Abstraction Hurts
 
 Use when tempted to extract an abstraction, create a base class, or build for a future requirement that doesn't exist yet. Covers when DRY helps vs hurts, the Rule of Three, and YAGNI violations common in AI-generated code.

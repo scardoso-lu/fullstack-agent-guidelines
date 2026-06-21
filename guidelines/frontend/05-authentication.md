@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Authentication — JWT, Cookies, and Route Protection
 
 Use when implementing login, protecting routes, or reading the current user. Covers JWT cookie setup, Edge middleware route guard, AuthProvider with useUser hook, and the /api/me pattern for HttpOnly cookies.

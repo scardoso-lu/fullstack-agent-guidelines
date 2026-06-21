@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Frontend E2E with Playwright — Setup, Patterns, and Anti-Patterns
 
 Use when adding Playwright to a Next.js project, writing the first E2E for a feature, or reviewing test code for the gate. Defines the project layout, the auth/storage-state pattern (log in once, reuse cookies), role-based selectors over CSS classes, API-driven seeding, and the **no `sleep`, no `waitForTimeout`** rule that keeps the suite deterministic.

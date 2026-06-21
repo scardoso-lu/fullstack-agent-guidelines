@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # SOLID, DRY, KISS, and YAGNI — Applied to Next.js
 
 Use when designing a component, hook, or Zod schema. Frontend-specific SOLID/DRY/KISS/YAGNI: one-concern-per-component (S), composition over prop-drilling (O), schema-first Zod for DRY, and YAGNI on hooks.

@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Python Project Setup — Docker + uv
 
 Use when creating the backend Dockerfile, initialising a new Python service, or switching from pip/poetry to uv. Covers Python 3.13, uv installation from the official image, lockfile-first install, non-root user, and .env convention.

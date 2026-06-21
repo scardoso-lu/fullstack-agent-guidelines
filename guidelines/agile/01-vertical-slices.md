@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: extract
+---
+
 # Vertical Slices — Ship One Capability End-to-End
 
 Use when picking up a backlog ticket, planning the next chunk of work, or deciding how to split a feature. Defines what a vertical slice is, the dependency order it travels (domain → use-case → API → schema → UI → tests), the "one branch per slice" rule, and how to keep slices from turning into long-lived feature branches.

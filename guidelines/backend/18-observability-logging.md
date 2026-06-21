@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Observability — Structured Logging, Levels, and the Audit/Log Split
 
 Use when adding logging to a use-case, configuring the logger at boot, or reviewing a slice that emits new events. Defines the structured-log facade rule (one app-wide `Logger`, injected via DI — **no module-level `get_logger()`** in business code), the log-level taxonomy (DEBUG / INFO / WARNING / ERROR / CRITICAL), the JSON-to-stdout-only output policy, the redaction rule for cookies/tokens/PII, and the **hard line** between operational logs and the audit trail.

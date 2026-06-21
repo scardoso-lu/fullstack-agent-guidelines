@@ -1,3 +1,8 @@
+---
+model: opus
+effort: high
+---
+
 # Supply Chain Security — Next.js and npm
 
 Use when adding a new npm package, setting up CI, or configuring Docker. Covers exact version pinning, save-exact=true, npm audit in CI, SHA-pinned GitHub Actions, Dependabot config, and SRI for CDN assets.

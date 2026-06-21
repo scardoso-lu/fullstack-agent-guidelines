@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Loading, Error, and Empty States — App Router Conventions
 
 Use when building any page, route, or interactive component that depends on async data. Defines the four states **every** data-bound component must explicitly handle (loading, error, empty, success), Next.js App Router's purpose-built files (`loading.tsx`, `error.tsx`, `not-found.tsx`), Suspense boundary placement, and the rule that an unhandled state is a **DoD-blocking** finding — a vibecoded page that shows a flicker, a flash of "undefined", or a blank screen because the success state was the only one designed is incomplete.

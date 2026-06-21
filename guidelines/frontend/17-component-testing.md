@@ -1,3 +1,8 @@
+---
+model: sonnet
+effort: high
+---
+
 # Component Testing — Vitest + Testing Library
 
 Use when writing tests for a React component, a hook, or a small piece of UI logic that doesn't need a browser. Defines the **three-layer test pyramid** (unit logic in Vitest, component rendering in Vitest + Testing Library + jsdom, full flows in Playwright), what each layer is *for*, the Testing Library query priority (`getByRole` over `getByTestId`), the `user-event` rule (never fire raw DOM events), and the mocking boundary (mock the network and time; don't mock React).
