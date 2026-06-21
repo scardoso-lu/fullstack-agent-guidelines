@@ -117,59 +117,49 @@ import sqlalchemy as sa
 from alembic import op
 
 def upgrade() -> None:
-    permissions_table = sa.table(
-        "permissions",
-        sa.column("id", sa.Integer),
-        sa.column("slug", sa.String),
-        sa.column("name", sa.String),
-        sa.column("description", sa.String),
-        sa.column("is_active", sa.Boolean),
-    )
-    op.bulk_insert(permissions_table, [
-        {"id": 1,  "slug": "articles:read",   "name": "Read articles",    "description": None, "is_active": True},
-        {"id": 2,  "slug": "articles:write",  "name": "Write articles",   "description": None, "is_active": True},
-        {"id": 3,  "slug": "articles:delete", "name": "Delete articles",  "description": None, "is_active": True},
-        {"id": 4,  "slug": "users:read",      "name": "Read users",       "description": None, "is_active": True},
-        {"id": 5,  "slug": "users:manage",    "name": "Manage users",     "description": None, "is_active": True},
-        {"id": 6,  "slug": "settings:read",   "name": "Read settings",    "description": None, "is_active": True},
-        {"id": 7,  "slug": "settings:write",  "name": "Write settings",   "description": None, "is_active": True},
-        {"id": 8,  "slug": "roles:manage",    "name": "Manage roles",     "description": None, "is_active": True},
-    ])
+    # Insert without explicit IDs so the autoincrement sequence stays in sync.
+    # role_permissions are wired by slug-based subquery, not hardcoded integers.
+    conn = op.get_bind()
 
-    roles_table = sa.table(
-        "roles",
-        sa.column("id", sa.Integer),
-        sa.column("name", sa.String),
-        sa.column("slug", sa.String),
-        sa.column("is_active", sa.Boolean),
+    conn.execute(
+        sa.text("""
+            INSERT INTO permissions (slug, name, description, is_active) VALUES
+            ('articles:read',   'Read articles',   NULL, TRUE),
+            ('articles:write',  'Write articles',  NULL, TRUE),
+            ('articles:delete', 'Delete articles', NULL, TRUE),
+            ('users:read',      'Read users',      NULL, TRUE),
+            ('users:manage',    'Manage users',    NULL, TRUE),
+            ('settings:read',   'Read settings',   NULL, TRUE),
+            ('settings:write',  'Write settings',  NULL, TRUE),
+            ('roles:manage',    'Manage roles',    NULL, TRUE)
+        """)
     )
-    op.bulk_insert(roles_table, [
-        {"id": 1, "name": "Admin",  "slug": "admin",  "is_active": True},
-        {"id": 2, "name": "Editor", "slug": "editor", "is_active": True},
-        {"id": 3, "name": "Viewer", "slug": "viewer", "is_active": True},
-    ])
 
-    rp_table = sa.table(
-        "role_permissions",
-        sa.column("role_id", sa.Integer),
-        sa.column("permission_id", sa.Integer),
+    conn.execute(
+        sa.text("""
+            INSERT INTO roles (name, slug, is_active) VALUES
+            ('Admin',  'admin',  TRUE),
+            ('Editor', 'editor', TRUE),
+            ('Viewer', 'viewer', TRUE)
+        """)
     )
-    op.bulk_insert(rp_table, [
-        # admin gets everything
-        {"role_id": 1, "permission_id": 1},
-        {"role_id": 1, "permission_id": 2},
-        {"role_id": 1, "permission_id": 3},
-        {"role_id": 1, "permission_id": 4},
-        {"role_id": 1, "permission_id": 5},
-        {"role_id": 1, "permission_id": 6},
-        {"role_id": 1, "permission_id": 7},
-        {"role_id": 1, "permission_id": 8},
-        # editor: read + write articles
-        {"role_id": 2, "permission_id": 1},
-        {"role_id": 2, "permission_id": 2},
-        # viewer: read articles only
-        {"role_id": 3, "permission_id": 1},
-    ])
+
+    # Join by slug so no hardcoded IDs are needed and sequences stay correct.
+    conn.execute(
+        sa.text("""
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id FROM roles r, permissions p
+            WHERE
+                -- admin gets everything
+                (r.slug = 'admin')
+                OR
+                -- editor: read + write articles
+                (r.slug = 'editor' AND p.slug IN ('articles:read', 'articles:write'))
+                OR
+                -- viewer: read articles only
+                (r.slug = 'viewer' AND p.slug = 'articles:read')
+        """)
+    )
 ```
 
 ### 3 — JWT Contains Role Slug Only
@@ -210,7 +200,10 @@ The permission slug used in a route handler is a string that references a record
 ```python
 def require_permission(permission_slug: str):
     def _check(current_user: User = Depends(get_current_user)) -> User:
-        has = any(p.slug == permission_slug for p in current_user.role.permissions)
+        has = any(
+            p.slug == permission_slug and p.is_active
+            for p in current_user.role.permissions
+        )
         if not has:
             raise ForbiddenError(
                 f"Role '{current_user.role.slug}' lacks permission '{permission_slug}'"

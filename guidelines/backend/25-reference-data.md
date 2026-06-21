@@ -187,10 +187,11 @@ Cache the response (Next.js `fetch` with `revalidate`) so the dropdown doesn't m
 | Priority levels | `Priority` | `level` (int for ordering logic), `color` |
 | Document types (invoice, contract…) | `DocumentType` | `template_id` |
 | Payment methods | `PaymentMethod` | `provider`, `config` (JSON) |
-| User roles | `Role` | `permissions` (JSON array) |
 | Tags / labels | `Tag` | `color` |
 | Notification types | `NotificationType` | `template`, `channel` |
 | Countries / currencies | `Country`, `Currency` | `code`, `locale` |
+
+> **User roles and permissions** are not simple lookup tables — they require a three-table RBAC design (`Permission`, `Role`, `role_permissions`) so assignments can be managed and revoked at runtime without a code change. See `backend/26-rbac-permissions`.
 
 ## Quick Checklist
 
