@@ -177,16 +177,25 @@ def create_access_token(user: User) -> str:
     return jwt.encode(payload, get_config().JWT_SECRET, algorithm="HS256")
 ```
 
-The `get_current_user` dependency resolves the full user — with role and its permissions — from the DB on every authenticated request:
+The `get_current_user` dependency resolves the full user — with role and its permissions — from the DB on every authenticated request. It follows the same `Annotated[AsyncSession, Depends(get_session)]` pattern used everywhere in the presentation layer (see `backend/05-presentation-layer`):
 
 **`src/infrastructure/services/auth_dependency.py`**
 ```python
+from typing import Annotated
+from fastapi import Depends
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.infrastructure.db.engine import get_session
+from src.infrastructure.repositories.user_repository import UserRepository
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    user_repo: UserRepositoryInterface = Depends(get_user_repository),
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     payload = decode_token(token)
-    user = await user_repo.get_by_id(payload["sub"])
+    user = await UserRepository(session).get_by_id(payload["sub"])
     if user is None or not user.role.is_active:
         raise UnauthorizedError("User or role not found")
     return user   # user.role.permissions is loaded via joined relationship
@@ -199,7 +208,9 @@ The permission slug used in a route handler is a string that references a record
 **`src/infrastructure/services/auth_dependency.py`**
 ```python
 def require_permission(permission_slug: str):
-    def _check(current_user: User = Depends(get_current_user)) -> User:
+    async def _check(
+        current_user: Annotated[User, Depends(get_current_user)],
+    ) -> User:
         has = any(
             p.slug == permission_slug and p.is_active
             for p in current_user.role.permissions
@@ -212,17 +223,25 @@ def require_permission(permission_slug: str):
     return _check
 ```
 
-Route handlers pass the slug string directly. The string must match a `permissions.slug` value in the DB — it is not a constant, it is a reference:
+Route handlers pass the slug string directly. The string must match a `permissions.slug` value in the DB — it is not a constant, it is a reference. The session is injected via `Depends(get_session)` and passed directly to the repository constructor, exactly as shown in `backend/05-presentation-layer`:
 
 **`src/presentation/routes/article.py`**
 ```python
-@router.delete("/articles/{article_id}")
+from typing import Annotated
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.infrastructure.db.engine import get_session
+from src.infrastructure.repositories.article_repository import ArticleRepository
+
+router = APIRouter(prefix="/articles", tags=["Articles"])
+
+@router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_article(
     article_id: int,
-    current_user: User = Depends(require_permission("articles:delete")),
-    use_case: DeleteArticleUseCase = Depends(get_delete_article_use_case),
-):
-    return await use_case.execute(article_id, current_user)
+    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(require_permission("articles:delete"))],
+) -> None:
+    await DeleteArticleUseCase(ArticleRepository(session)).execute(article_id, current_user)
 ```
 
 When a new permission is needed for a new endpoint, the workflow is:
@@ -236,7 +255,12 @@ The route dependency is the first gate. Use cases add a second check when owners
 
 **`src/application/use_cases/article/delete.py`**
 ```python
+from src.infrastructure.repositories.contract import ArticleRepositoryInterface
+
 class DeleteArticleUseCase:
+    def __init__(self, article_repository: ArticleRepositoryInterface) -> None:
+        self._repo = article_repository   # constructor injection — depends on interface
+
     async def execute(self, article_id: int, current_user: User) -> None:
         article = await self._repo.get_by_id(article_id)
         if article is None:
@@ -244,7 +268,8 @@ class DeleteArticleUseCase:
 
         owns = article.author_id == current_user.id
         can_delete_any = any(
-            p.slug == "articles:delete" for p in current_user.role.permissions
+            p.slug == "articles:delete" and p.is_active
+            for p in current_user.role.permissions
         )
         if not owns and not can_delete_any:
             raise ForbiddenError("Cannot delete another user's article")
