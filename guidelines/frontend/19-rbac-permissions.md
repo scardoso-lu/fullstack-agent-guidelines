@@ -215,7 +215,11 @@ import { jwtVerify } from "jose";
 
 type JwtPayload = { sub: string; role?: string };
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+// Fail closed: throw at module load so the edge function refuses to start
+// rather than silently verifying against an empty key.
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret) throw new Error("JWT_SECRET env var is not set");
+const secret = new TextEncoder().encode(rawSecret);
 const PROTECTED = /^\/(dashboard|admin|settings)(\/|$)/;
 const ADMIN_ONLY = /^\/admin(\/|$)/;
 
@@ -331,6 +335,7 @@ Never write code that assumes a hidden button is a protected action.
 - [ ] `PermissionProvider` wraps inside the existing `UserProvider` — does not replace it
 - [ ] A single `usePermission()` hook is the only place components read permission state
 - [ ] Middleware uses `jwtVerify` from `jose` (signature + expiry verified), not `jwtDecode` (decode-only, bypassable by forged cookies)
+- [ ] `JWT_SECRET` is validated at module load before `TextEncoder().encode()` — missing secret throws rather than silently producing an empty key
 - [ ] `JWT_SECRET` is a server-only env var in middleware — no `NEXT_PUBLIC_` prefix
 - [ ] `<PermissionGate>` wraps conditional UI — no inline ternaries checking role strings
 - [ ] The frontend never treats its own permission checks as security enforcement

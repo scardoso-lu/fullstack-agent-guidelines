@@ -42,7 +42,11 @@ if (payload?.role !== "admin") return redirect("/login");
 // src/middleware.ts
 import { jwtVerify } from "jose";
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+// Fail closed: throw at module load so the edge function refuses to start
+// rather than silently verifying against an empty key.
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret) throw new Error("JWT_SECRET env var is not set");
+const secret = new TextEncoder().encode(rawSecret);
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get("x-access-token")?.value;
@@ -353,6 +357,7 @@ Every route segment should have an `error.tsx` boundary. The root `app/error.tsx
 ## Quick Checklist
 
 - [ ] Route protection is in `middleware.ts` using `jwtVerify` (signature verified) — never `decodeToken` alone, never only in the component
+- [ ] `JWT_SECRET` is validated at module load before `TextEncoder().encode()` — missing secret throws rather than silently producing an empty key
 - [ ] Role-based UI visibility uses `<PermissionGate>` and `usePermission()` from `frontend/19-rbac-permissions` — never inline `user.role === "admin"` checks
 - [ ] Security headers set in `next.config.ts` (CSP, X-Frame-Options, HSTS, CORS)
 - [ ] `NEXT_PUBLIC_` prefix only on values intentionally visible to users — never on secrets
