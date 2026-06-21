@@ -1,29 +1,13 @@
 ---
 name: dev-guidelines
 description: |
-  Consult the Fullstack Guidelines MCP server BEFORE generating code for any web-app feature — Python/FastAPI on the backend, Next.js on the frontend. Auto-invoke when the user describes WHAT they want in everyday product language ("add a login page", "let users upload photos", "make a dashboard", "deploy this", "make it faster") — not just when they use developer jargon.
+  Consult the Fullstack Guidelines MCP server BEFORE generating code for any web-app feature — Python/FastAPI backend, Next.js frontend. Auto-invoke when the user describes WHAT they want in everyday product language, not just developer jargon.
 
-  TRIGGER on natural / vibecoder requests like:
-   • "make me a website that / an app that / a thing where users can..."
-   • "add login" • "add sign up" • "let users log in with email" • "google login" • "forgot password"
-   • "save this to a database" • "remember the user's settings" • "store the photos"
-   • "show a list of..." • "show all the X" • "add a search bar" • "filter by..." • "sort by..." • "paginate"
-   • "add a form to..." • "let users edit their profile" • "add a button that..."
-   • "make a dashboard" • "admin page" • "settings page" • "profile page"
-   • "let users upload files / images / avatars / a CSV"
-   • "send an email when..." • "notify the user when..." • "send a confirmation"
-   • "make it look nicer / cleaner / more modern" • "make it like <some site>" • "redesign this"
-   • "make it mobile friendly" • "make it responsive" • "dark mode" • "accessibility"
-   • "this is slow" • "make it faster" • "the page lags" • "the API is too slow"
-   • "fix this error" • "this is broken" • "it crashes when..." • "the data doesn't update"
-   • "deploy this" • "ship it" • "make it live" • "put it on Vercel"
-   • "add payments / Stripe / checkout / subscriptions"
-   • "users with different roles" • "admin can do X but regular user can't"
-   • "the form doesn't save" • "loading forever" • "blank screen"
+  TRIGGER on vibecoder requests: add login, sign up, forgot password, save to database, show a list, search, filter, paginate, form, edit profile, dashboard, admin page, upload files, send email, notifications, redesign, responsive, dark mode, accessibility, make it faster, fix error, crashes, deploy, Vercel, payments, Stripe, checkout, roles, permissions.
 
-  ALSO TRIGGER on developer phrasing (use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, accessibility, loading states, code review, definition of done).
+  ALSO TRIGGER on dev phrasing: use case, domain layer, audit, tenant isolation, vertical slice, Server Components, Server Actions, ADR, OWASP, Alembic, idempotency, pagination, loading states, code review, definition of done.
 
-  The skill primes the agent to fetch the right guideline from the public MCP server instead of inventing patterns from training data — even when the user has no idea what a "pattern" is.
+  Primes the agent to fetch the right guideline from the MCP server instead of inventing patterns from training data.
 ---
 
 # Use the Fullstack Guidelines MCP server
