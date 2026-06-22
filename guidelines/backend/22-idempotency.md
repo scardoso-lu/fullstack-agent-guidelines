@@ -132,7 +132,7 @@ class IdempotencyStore:
             expires_at=datetime.utcnow() + KEY_TTL,
         )
         self.session.add(record)
-        await self.session.flush()           # per backend/04: flush in repo/store, commit in session ctx
+        await self.session.flush()           # per backend/28: flush in repo/store, commit in session ctx
 ```
 
 **`src/payments/api.py`**
