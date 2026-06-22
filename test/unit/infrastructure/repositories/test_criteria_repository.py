@@ -78,3 +78,20 @@ async def test_security_criteria_cover_expected_categories(repo):
     assert "auth" in categories
     assert "secrets" in categories
     assert "injection" in categories
+
+
+@pytest.mark.asyncio
+async def test_get_by_stack_structure_returns_only_structure_criteria(repo):
+    result = await repo.get_by_stack("structure")
+    assert len(result) > 0
+    assert all(c.stack == "structure" for c in result)
+
+
+@pytest.mark.asyncio
+async def test_structure_criteria_cover_expected_categories(repo):
+    result = await repo.get_by_stack("structure")
+    categories = {c.category for c in result}
+    assert "domain-layer" in categories
+    assert "application-layer" in categories
+    assert "presentation-layer" in categories
+    assert "project-structure" in categories
