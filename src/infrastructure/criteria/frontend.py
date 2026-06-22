@@ -11,7 +11,7 @@ CRITERIA: list[ComplianceCriterion] = [
         check_type="command",
         verification_hint="Run `eslint .` (or `npx eslint .`) and paste the full output",
         check_command="eslint .",
-        pass_pattern=r"^\s*$",
+        pass_pattern=r"\A\s*\Z",
         fail_pattern=r"error\s+.+\s+\w+/\w+|\d+ error",
     ),
     ComplianceCriterion(
@@ -37,7 +37,7 @@ CRITERIA: list[ComplianceCriterion] = [
         check_type="command",
         verification_hint="Run `npx tsc --noEmit` and paste the full output",
         check_command="npx tsc --noEmit",
-        pass_pattern=r"^\s*$",
+        pass_pattern=r"\A\s*\Z",
         fail_pattern=r"error TS\d+|\.tsx?\(\d+",
     ),
     ComplianceCriterion(
@@ -76,5 +76,18 @@ CRITERIA: list[ComplianceCriterion] = [
         check_command="npx playwright test",
         pass_pattern=r"\d+ passed",
         fail_pattern=r"\d+ failed|Error:",
+    ),
+    ComplianceCriterion(
+        id="frontend/dod/e2e-per-variant",
+        guideline_slug="agile/06-dod-frontend",
+        stack="frontend",
+        text="Every new user-facing state/action introduced by the slice has at least one E2E that walks the flow and asserts it renders",
+        category="testing",
+        severity="required",
+        check_type="manual",
+        verification_hint=(
+            "List each new user-facing state, action, or lifecycle variant introduced by this slice "
+            "and provide the Playwright test name/file that covers it (e.g. 'status=cancelled → tests/e2e/order.spec.ts:L88')."
+        ),
     ),
 ]

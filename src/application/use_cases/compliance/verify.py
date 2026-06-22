@@ -17,13 +17,19 @@ def _evaluate_command(criterion: ComplianceCriterion, output: str) -> tuple[bool
     if criterion.fail_pattern and re.search(criterion.fail_pattern, output, re.MULTILINE):
         match = re.search(criterion.fail_pattern, output, re.MULTILINE)
         return False, f"fail_pattern matched: {match.group(0)!r}"  # type: ignore[union-attr]
-    if criterion.pass_pattern and re.search(criterion.pass_pattern, output, re.MULTILINE):
-        match = re.search(criterion.pass_pattern, output, re.MULTILINE)
-        return True, f"pass_pattern matched: {match.group(0)!r}"  # type: ignore[union-attr]
+    if criterion.pass_pattern:
+        # Use re.search without MULTILINE so \A/\Z anchors work correctly for
+        # whole-output patterns (e.g. r"\A\s*\Z" must match the full string,
+        # not just an empty line inside multi-line diagnostic output).
+        match = re.search(criterion.pass_pattern, output)
+        if match:
+            return True, f"pass_pattern matched: {match.group(0)!r}"
     return False, "output did not match pass_pattern"
 
 
 def _evaluate_code_pattern(criterion: ComplianceCriterion, snippet: str) -> tuple[bool, str]:
+    if not snippet or not snippet.strip():
+        return False, "no code snippet provided"
     if criterion.forbidden_pattern:
         match = re.search(criterion.forbidden_pattern, snippet, re.MULTILINE)
         if match:

@@ -305,3 +305,45 @@ async def test_empty_assessments_raises_value_error(mock_repo):
     mock_repo.get_all.return_value = []
     with pytest.raises(ValueError, match="assessments cannot be empty"):
         await VerifyComplianceUseCase(mock_repo).execute([])
+
+
+@pytest.mark.asyncio
+async def test_empty_snippet_fails_forbidden_only_check(mock_repo):
+    # A caller that omits code_snippet on a forbidden-only criterion must not get a free pass.
+    mock_repo.get_all.return_value = [
+        _pattern_criterion(required_pattern=None, forbidden_pattern=r"\bany\b")
+    ]
+    assessment = AssessmentInputDto(criterion_id="backend/dod/auth-on-routes", code_snippet=None)
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["backend"].results[0].passed is False
+    assert "no code snippet" in result.stacks["backend"].results[0].reason
+
+
+@pytest.mark.asyncio
+async def test_pass_pattern_anchored_to_whole_output_not_empty_line(mock_repo):
+    # r"\A\s*\Z" must NOT match when output contains diagnostic lines alongside blank lines.
+    criterion = ComplianceCriterion(
+        id="frontend/dod/lint-clean",
+        guideline_slug="agile/06-dod-frontend",
+        stack="frontend",
+        text="Lint clean",
+        category="code-quality",
+        severity="required",
+        check_type="command",
+        verification_hint="Run eslint",
+        check_command="eslint .",
+        pass_pattern=r"\A\s*\Z",
+        fail_pattern=r"\d+ error",
+    )
+    mock_repo.get_all.return_value = [criterion]
+    # Output has a blank line but also diagnostic content — must not pass.
+    assessment = AssessmentInputDto(
+        criterion_id="frontend/dod/lint-clean",
+        command_output="src/app.ts: line 4 warning\n\n1 warning",
+    )
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["frontend"].results[0].passed is False

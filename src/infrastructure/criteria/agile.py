@@ -42,4 +42,17 @@ CRITERIA: list[ComplianceCriterion] = [
             "(e.g. `docs/security/<ticket>.md`) and confirm it exists and is complete."
         ),
     ),
+    ComplianceCriterion(
+        id="agile/dod/security-guidance-honored",
+        guideline_slug="agile/07-dod-security",
+        stack="agile",
+        text="Slice honored the security guidance set at slice start (threat model and secure-coding requirements)",
+        category="security",
+        severity="required",
+        check_type="manual",
+        verification_hint=(
+            "Confirm the threat model and secure-coding requirements defined at slice start were followed. "
+            "Provide a brief summary of the security requirements and how each was addressed in the implementation."
+        ),
+    ),
 ]
