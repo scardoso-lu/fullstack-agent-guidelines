@@ -11,7 +11,7 @@ CRITERIA: list[ComplianceCriterion] = [
         check_type="command",
         verification_hint="Run `ruff check .` and paste the full output (stdout + stderr)",
         check_command="ruff check .",
-        pass_pattern=r"All checks passed\.",
+        pass_pattern=r"All checks passed",
         fail_pattern=r"\d+\s+error|Found \d+",
     ),
     ComplianceCriterion(
@@ -24,7 +24,7 @@ CRITERIA: list[ComplianceCriterion] = [
         check_type="command",
         verification_hint="Run `ruff format --check .` and paste the full output",
         check_command="ruff format --check .",
-        pass_pattern=r"All checks passed\.|0 files would be reformatted",
+        pass_pattern=r"files? already formatted",
         fail_pattern=r"would reformat|\d+ files? would be reformatted",
     ),
     ComplianceCriterion(
@@ -35,8 +35,8 @@ CRITERIA: list[ComplianceCriterion] = [
         category="code-quality",
         severity="required",
         check_type="command",
-        verification_hint="Run `mypy --strict src/` and paste the full output",
-        check_command="mypy --strict src/",
+        verification_hint="Run `uv run mypy --strict src/` and paste the full output",
+        check_command="uv run mypy --strict src/",
         pass_pattern=r"Success: no issues found",
         fail_pattern=r"error:|Found \d+ error",
     ),
@@ -76,7 +76,7 @@ CRITERIA: list[ComplianceCriterion] = [
         check_type="command",
         verification_hint="Run `ruff check . --select C90` and paste the full output",
         check_command="ruff check . --select C90",
-        pass_pattern=r"All checks passed\.",
+        pass_pattern=r"All checks passed",
         fail_pattern=r"C901|too complex",
     ),
     ComplianceCriterion(

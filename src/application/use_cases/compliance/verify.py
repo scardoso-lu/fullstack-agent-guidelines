@@ -14,6 +14,8 @@ _logger = get_logger("use_case.verify_compliance")
 
 
 def _evaluate_command(criterion: ComplianceCriterion, output: str) -> tuple[bool, str]:
+    if not output or not output.strip():
+        return False, "no command output provided"
     if criterion.fail_pattern and re.search(criterion.fail_pattern, output, re.MULTILINE):
         match = re.search(criterion.fail_pattern, output, re.MULTILINE)
         return False, f"fail_pattern matched: {match.group(0)!r}"  # type: ignore[union-attr]

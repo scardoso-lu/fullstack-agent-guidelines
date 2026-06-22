@@ -321,6 +321,100 @@ async def test_empty_snippet_fails_forbidden_only_check(mock_repo):
     assert "no code snippet" in result.stacks["backend"].results[0].reason
 
 
+# ── regression: real ruff/mypy output strings ───────────────────────────────
+
+@pytest.mark.asyncio
+async def test_empty_command_output_fails(mock_repo):
+    # Blank/omitted command_output must not satisfy any pass_pattern, including \A\s*\Z.
+    from src.infrastructure.criteria.backend import CRITERIA as BACKEND_CRITERIA
+    criterion = next(c for c in BACKEND_CRITERIA if c.id == "backend/dod/format-clean")
+    mock_repo.get_all.return_value = [criterion]
+    assessment = AssessmentInputDto(criterion_id="backend/dod/format-clean", command_output="")
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    r = result.stacks["backend"].results[0]
+    assert r.passed is False
+    assert "no command output" in r.reason
+
+
+@pytest.mark.asyncio
+async def test_none_command_output_fails(mock_repo):
+    from src.infrastructure.criteria.backend import CRITERIA as BACKEND_CRITERIA
+    criterion = next(c for c in BACKEND_CRITERIA if c.id == "backend/dod/format-clean")
+    mock_repo.get_all.return_value = [criterion]
+    assessment = AssessmentInputDto(criterion_id="backend/dod/format-clean", command_output=None)
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["backend"].results[0].passed is False
+
+
+@pytest.mark.asyncio
+async def test_ruff_lint_exclamation_output_passes(mock_repo):
+    # ruff check . outputs "All checks passed!" (exclamation, no period).
+    # The old pattern r"All checks passed\." missed the ! and falsely failed.
+    from src.infrastructure.criteria.backend import CRITERIA as BACKEND_CRITERIA
+    criterion = next(c for c in BACKEND_CRITERIA if c.id == "backend/dod/lint-clean")
+    mock_repo.get_all.return_value = [criterion]
+    assessment = AssessmentInputDto(
+        criterion_id="backend/dod/lint-clean",
+        command_output="All checks passed!",
+    )
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["backend"].results[0].passed is True
+
+
+@pytest.mark.asyncio
+async def test_ruff_format_already_formatted_output_passes(mock_repo):
+    # ruff format --check . outputs "84 files already formatted" when clean.
+    # The old pattern r"All checks passed\.|0 files would be reformatted" never matched this.
+    from src.infrastructure.criteria.backend import CRITERIA as BACKEND_CRITERIA
+    criterion = next(c for c in BACKEND_CRITERIA if c.id == "backend/dod/format-clean")
+    mock_repo.get_all.return_value = [criterion]
+    assessment = AssessmentInputDto(
+        criterion_id="backend/dod/format-clean",
+        command_output="84 files already formatted",
+    )
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["backend"].results[0].passed is True
+
+
+@pytest.mark.asyncio
+async def test_ruff_format_would_reformat_output_fails(mock_repo):
+    from src.infrastructure.criteria.backend import CRITERIA as BACKEND_CRITERIA
+    criterion = next(c for c in BACKEND_CRITERIA if c.id == "backend/dod/format-clean")
+    mock_repo.get_all.return_value = [criterion]
+    assessment = AssessmentInputDto(
+        criterion_id="backend/dod/format-clean",
+        command_output="Would reformat src/main.py\n1 file would be reformatted",
+    )
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["backend"].results[0].passed is False
+
+
+@pytest.mark.asyncio
+async def test_ruff_complexity_exclamation_output_passes(mock_repo):
+    # ruff check . --select C90 also outputs "All checks passed!" — same fix as lint-clean.
+    from src.infrastructure.criteria.backend import CRITERIA as BACKEND_CRITERIA
+    criterion = next(c for c in BACKEND_CRITERIA if c.id == "backend/dod/complexity-cap")
+    mock_repo.get_all.return_value = [criterion]
+    assessment = AssessmentInputDto(
+        criterion_id="backend/dod/complexity-cap",
+        command_output="All checks passed!",
+    )
+
+    result = await VerifyComplianceUseCase(mock_repo).execute([assessment])
+
+    assert result.stacks["backend"].results[0].passed is True
+
+
 @pytest.mark.asyncio
 async def test_pass_pattern_anchored_to_whole_output_not_empty_line(mock_repo):
     # r"\A\s*\Z" must NOT match when output contains diagnostic lines alongside blank lines.
