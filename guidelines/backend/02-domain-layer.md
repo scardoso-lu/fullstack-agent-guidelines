@@ -15,7 +15,7 @@ The domain layer is the heart of the application. It contains the business objec
 - **Value Objects** — Immutable objects with structural equality (no identity needed)
 - **Domain Services** — Stateless logic that spans multiple entities
 
-What does NOT belong here: imports from `fastapi`, `sqlalchemy.orm`, `infrastructure`, or `presentation`.
+What does NOT belong here: imports from `fastapi`, `sqlalchemy.orm`, `infrastructure`, or `presentation`. **Exception:** `from src.infrastructure.db.base import Base, IdMixin, generate_snowflake_id` — entities must inherit from `Base` to be ORM-mapped; this is the one permitted infrastructure import (already noted in the checklist).
 
 ## SQLAlchemy Entity Pattern
 

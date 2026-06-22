@@ -238,9 +238,11 @@ Protect the route with middleware — only `admin` role can reach `/admin/**`.
 | A build-time or deploy-time flag | 1 | `.env` / env var |
 | A user-adjustable limit (upload size) | 2 | `app_config` table |
 | A user-adjustable preference (language) | 2 | `app_config` table |
-| A feature flag toggleable without redeploy | 2 | `app_config` table |
+| A **business** feature flag (enable premium tier, kill switch, beta access) | 2 | `app_config` table |
 | Per-user preference (dark mode, timezone) | — | User profile table |
 | A list users can extend or rename | — | See `backend/25-reference-data` |
+
+> **Business vs. technical feature flags.** A business flag (`enable_premium_exports = true/false`) gates a product capability — it is a legitimate runtime config row. A *technical* flag that keeps two code paths alive simultaneously (`use_new_auth = true/false`) is an anti-pattern — see `backend/16-rework-clean` (delete the old path in the same PR, don't flag it).
 
 ## Anti-Patterns
 

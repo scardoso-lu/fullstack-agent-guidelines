@@ -376,4 +376,5 @@ This approach scales to 50+ lines for a 3-field form. Every field needs its own 
 - [ ] `isSubmitting` or `isPending` disables the submit button and shows a loading label
 - [ ] `input-error` class applied to the input when `errors.fieldName` is set
 - [ ] Error messages use `label-text-alt text-error` inside a second `<label className="label">` — daisyUI standard placement
+- [ ] Error-state inputs have `aria-invalid` and `aria-describedby` wired to the error message element (see `frontend/15-accessibility`)
 - [ ] No `useState` + manual validation logic — let Zod handle it
