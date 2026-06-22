@@ -5,40 +5,19 @@ effort: extract
 
 # Definition of Done — The Gate Every Slice Crosses
 
-Use at the end of every slice, before merging the PR. Defines the exact set of checks that determine whether a slice is shippable: lint, format, type-check, unit + integration + E2E tests, coverage, audit-on-write, authorization checks, security verification, and documentation/diagram freshness. Anything not on the list is not part of DoD; everything on the list is a hard gate.
+Use at the end of every slice, before merging the PR. Defines what "done" means across backend, frontend, and security. Anything not on a checklist is not part of DoD; everything on a checklist is a hard gate (except documentation, which is soft).
 
-The Definition of Done (DoD) is the contract between the engineer who wrote the slice and the rest of the team. "Done" means **every item below is green** — not "tests pass on my machine," not "I'll fix the lint warnings later," not "the E2E is flaky so I skipped it."
+The Definition of Done (DoD) is the contract between the engineer who wrote the slice and the rest of the team. "Done" means **every item on the relevant checklists is green** — not "tests pass on my machine," not "I'll fix the lint warnings later," not "the E2E is flaky so I skipped it."
 
 The DoD is a **hard gate**. Soft checks (ERD diagram refresh, observability spot-checks) are flagged but do not block; everything else blocks until green.
 
-## The DoD checklist
+## The checklists
 
-### Backend
+Pull the checklist for your stack. A fullstack slice pulls both.
 
-- [ ] **Lint clean** — `ruff check .` exits 0. No `# noqa` added without a comment naming the reason.
-- [ ] **Format clean** — `ruff format --check .` exits 0. CI does not auto-format; the engineer does.
-- [ ] **Type-check clean** — `mypy --strict src/` exits 0. No `# type: ignore` added without a one-line justification.
-- [ ] **Unit tests green** — every new use-case has at least one test; every branch in the use-case is covered.
-- [ ] **Integration tests green** — routes + DB tested with **testcontainers** (not mocks). Mocking the DB hides migration and query bugs.
-- [ ] **Coverage meets the project threshold** — the project contract names the percentage (commonly 80% or 90%).
-- [ ] **Audit-on-write check** — every write path in the slice emits a structured audit event in the **same transaction** as the write. Reviewer checks this explicitly; see `backend/19-audit-on-write`.
-- [ ] **Authorization check** — every new route is guarded by a `require("<permission>")` dependency (or the project's equivalent). Owner bypass and 403 behavior verified.
-- [ ] **Complexity cap** — every new function has cyclomatic complexity ≤ 10 (ruff `C90`). Functions over the limit are decomposed, not exempted.
-
-### Frontend
-
-- [ ] **Lint clean** — `eslint` exits 0.
-- [ ] **Format clean** — `prettier --check` exits 0.
-- [ ] **Type-check clean** — `tsc --noEmit` exits 0. No `any` introduced.
-- [ ] **Unit tests green** — `vitest` passes; new hooks/components have at least one test.
-- [ ] **Playwright E2E green** for the affected critical flow.
-- [ ] **E2E per new variant** — every new user-facing state/action introduced by the slice (a new lifecycle action, status, tab, enum that renders) has at least one E2E that walks the flow and asserts it *renders*. See `qa/02-e2e-per-feature`.
-
-### Security (hard gate — owned by the security review)
-
-- [ ] **No open Critical or High finding** across code SAST, dependency CVEs, Docker image scan, secrets, and supply-chain checks (see `backend/13-owasp-top10` and `frontend/07-owasp-top10` for the catalog).
-- [ ] **Slice honored the security guidance** set at slice start (threat model + secure-coding requirements).
-- [ ] **Per-ticket security report** exists at the project's security-report location (e.g. `docs/security/<ticket>.md`).
+- **Backend** → `agile/05-dod-backend`
+- **Frontend** → `agile/06-dod-frontend`
+- **Security** → `agile/07-dod-security` (hard gate — owned by the security review)
 
 ### Documentation (soft — flagged, not blocked)
 

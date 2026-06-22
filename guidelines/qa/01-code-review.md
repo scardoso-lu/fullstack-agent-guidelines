@@ -54,8 +54,8 @@ In rough priority order:
 ### 5. Simplicity & reuse
 
 - Did the slice **rewrite** something it could have **reused**? Repository methods, hooks, components, utility functions — check first.
-- Did it add an abstraction (factory, plugin point, generic config) without a second consumer? See the rework-clean guideline for both stacks. Three similar lines is better than a premature abstraction.
-- Did it add backwards-compatibility shims for code that isn't called?
+- Did it add an abstraction (factory, plugin point, generic config) without a second consumer? See `backend/27-feature-discipline` / `frontend/20-feature-discipline`. Three similar lines is better than a premature abstraction.
+- Did it add backwards-compatibility shims for code that isn't called? See `backend/16-rework-clean` / `frontend/11-rework-clean`.
 
 ### 6. Tests
 

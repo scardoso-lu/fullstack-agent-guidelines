@@ -144,6 +144,8 @@ Interfaces (ABCs) make sense when:
 
 Don't create `IFileReader` if there will ever be only one file reader. Don't create `ILogger` if you're just wrapping the standard library `logging` module.
 
+**Repository interfaces are an exception to this rule.** Always define `NoteRepositoryInterface` from the start even when there is only one concrete implementation. The contract enables swapping in an in-memory or mock repository during testing without touching the use case. See `backend/04-infrastructure-layer`.
+
 ```python
 # ❌ YAGNI — interface for something that never varies
 class IGuidelinesLoader(ABC):

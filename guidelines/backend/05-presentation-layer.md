@@ -178,6 +178,8 @@ async def get_user(user_id: int, session: Annotated[AsyncSession, Depends(get_se
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 ```
 
+**Prefer global exception handlers** (see `backend/20-error-handling`) — they keep routes thin and map domain exceptions to HTTP consistently in one place. Inline `try/except` in routes is acceptable only for cases where a specific route needs a status code that differs from the global default. The inline example above is kept for illustration; in a real project, register the global handler instead.
+
 For global handling across all routes, register exception handlers on the app:
 
 **`src/presentation/view.py`**

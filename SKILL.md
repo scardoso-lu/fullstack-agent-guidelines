@@ -26,7 +26,7 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | User says (everyday) | Fetch (slug or search) |
 |---|---|
 | "add login" / "sign up" / "forgot password" / "session" | `backend/08-security`, `backend/13-owasp-top10`, `frontend/05-authentication`, `frontend/16-server-actions` |
-| "save this to the database" / "store users" / "remember this" | `backend/02-domain-layer`, `backend/03-application-layer`, `backend/04-infrastructure-layer`, `backend/14-database-design`, `backend/19-audit-on-write` |
+| "save this to the database" / "store users" / "remember this" | `backend/02-domain-layer`, `backend/03-application-layer`, `backend/04-infrastructure-layer`, `backend/28-database-session`, `backend/14-database-design`, `backend/19-audit-on-write` |
 | "show a list" / "search" / "filter" / "sort" / "paginate" | `backend/21-api-pagination`, `frontend/03-data-fetching`, `frontend/14-loading-error-empty-states` |
 | "let users upload a file / photo / CSV" | `backend/13-owasp-top10` (file upload section), `frontend/04-forms-validation`, `frontend/16-server-actions` |
 | "form to..." / "edit profile" / "edit settings" | `frontend/04-forms-validation`, `frontend/16-server-actions` |
@@ -44,7 +44,10 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | "let me change my mind / undo" | `backend/19-audit-on-write` (state transitions audited), `backend/14-database-design` (soft delete vs hard delete) |
 | "make this testable" / "add tests" / "playwright" | `backend/09-testing`, `frontend/17-component-testing`, `qa/02-e2e-per-feature` |
 | "code review this" / "is this OK?" / "security review" / "is this secure?" | `qa/01-code-review`, `backend/13-owasp-top10`, `frontend/07-owasp-top10`, `frontend/19-rbac-permissions` |
-| "I'm starting a new feature" / "next ticket" / "PR" | `agile/01-vertical-slices`, `agile/02-definition-of-done`, `agile/03-conventional-commits`, `agile/04-pull-requests` |
+| "I'm starting a new feature" / "next ticket" / "PR" | `agile/01-vertical-slices`, `agile/02-definition-of-done`, `agile/03-conventional-commits`, `agile/04-pull-requests`, `backend/27-feature-discipline`, `frontend/20-feature-discipline` |
+| "refactor this" / "rework" / "clean this up" / "simplify" / "remove old code" / "delete the legacy" | `backend/16-rework-clean`, `frontend/11-rework-clean` |
+| "is the PR ready to merge?" / "definition of done" / "DoD" / "gate" / "checklist before merging" | `agile/02-definition-of-done`, `agile/05-dod-backend`, `agile/06-dod-frontend`, `agile/07-dod-security` |
+| "database migration" / "alembic" / "schema change" / "add a column" / "rename a table" | `backend/29-alembic-migrations`, `backend/23-safe-migrations` |
 
 If none of the rows match, fall through to `get_metadata` and `search_guidelines` (see Step 2).
 

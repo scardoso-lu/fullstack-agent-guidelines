@@ -241,7 +241,7 @@ export default async function DatasetPage({ params }: { params: Promise<{ id: st
 
 ### Tenant isolation note (security)
 
-Per `qa/02-security-review-process` (or your project's security ADRs), a cross-tenant resource read is **not-found**, not 403. The use-case returns `None` for "exists but not yours"; the page calls `notFound()`. Same outcome, no information leak about resource existence.
+Per `backend/13-owasp-top10` (A01 Broken Access Control) and your project's security ADRs, a cross-tenant resource read is **not-found**, not 403. The use-case returns `None` for "exists but not yours"; the page calls `notFound()`. Same outcome, no information leak about resource existence.
 
 ## Suspense boundaries — granularity matters
 
