@@ -24,7 +24,7 @@ CRITERIA: list[ComplianceCriterion] = [
         check_type="command",
         verification_hint="Run `ruff format --check .` and paste the full output",
         check_command="ruff format --check .",
-        pass_pattern=r"files? already formatted|\A\s*\Z",
+        pass_pattern=r"files? already formatted",
         fail_pattern=r"would reformat|\d+ files? would be reformatted",
     ),
     ComplianceCriterion(
