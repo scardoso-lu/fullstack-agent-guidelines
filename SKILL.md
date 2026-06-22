@@ -44,7 +44,8 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | "let me change my mind / undo" | `backend/19-audit-on-write` (state transitions audited), `backend/14-database-design` (soft delete vs hard delete) |
 | "make this testable" / "add tests" / "playwright" | `backend/09-testing`, `frontend/17-component-testing`, `qa/02-e2e-per-feature` |
 | "code review this" / "is this OK?" / "security review" / "is this secure?" | `qa/01-code-review`, `backend/13-owasp-top10`, `frontend/07-owasp-top10`, `frontend/19-rbac-permissions` |
-| "I'm starting a new feature" / "next ticket" / "PR" | `agile/01-vertical-slices`, `agile/02-definition-of-done`, `agile/03-conventional-commits`, `agile/04-pull-requests` |
+| "I'm starting a new feature" / "next ticket" / "PR" | `agile/01-vertical-slices`, `agile/02-definition-of-done`, `agile/03-conventional-commits`, `agile/04-pull-requests`, `backend/27-feature-discipline`, `frontend/20-feature-discipline` |
+| "refactor this" / "rework" / "clean this up" / "simplify" / "remove old code" / "delete the legacy" | `backend/16-rework-clean`, `frontend/11-rework-clean` |
 
 If none of the rows match, fall through to `get_metadata` and `search_guidelines` (see Step 2).
 
