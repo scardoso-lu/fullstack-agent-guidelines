@@ -14,7 +14,9 @@ Use when wiring the database engine, configuring the session factory, or decidin
 **`src/infrastructure/db/engine.py`**
 ```python
 from contextlib import asynccontextmanager
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from functools import lru_cache
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 @lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
