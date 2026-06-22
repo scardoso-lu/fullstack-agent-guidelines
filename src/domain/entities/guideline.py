@@ -8,6 +8,8 @@ VALID_STACKS: frozenset[str] = frozenset(
         "agile",
         "qa",
         "architecture",
+        "security",
+        "structure",
     }
 )
 

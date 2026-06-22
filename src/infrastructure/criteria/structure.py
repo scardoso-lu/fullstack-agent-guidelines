@@ -1,0 +1,217 @@
+from src.domain.entities.compliance import ComplianceCriterion
+
+CRITERIA: list[ComplianceCriterion] = [
+    # ── Domain layer ────────────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="structure/domain/frozen-dataclass-or-base",
+        guideline_slug="backend/02-domain-layer",
+        stack="structure",
+        text="Domain entities use @dataclass(frozen=True) or SQLAlchemy Base — no plain mutable classes",
+        category="domain-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the domain entity class definition(s) introduced in this slice",
+        required_pattern=r"@dataclass\s*\(\s*frozen\s*=\s*True\s*\)|class\s+\w+\s*\(.*Base\b",
+    ),
+    ComplianceCriterion(
+        id="structure/domain/no-mutable-list-default",
+        guideline_slug="backend/02-domain-layer",
+        stack="structure",
+        text="Domain entity fields with list/dict defaults use field(default_factory=...) — not bare [] or {}",
+        category="domain-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the domain entity class body where list or dict fields are declared",
+        forbidden_pattern=r":\s*list(?:\[[\w,\s\[\]|]+\])?\s*=\s*\[|:\s*dict(?:\[[\w,\s\[\]|,]+\])?\s*=\s*\{",
+    ),
+    ComplianceCriterion(
+        id="structure/domain/mock-method-exists",
+        guideline_slug="backend/02-domain-layer",
+        stack="structure",
+        text="Domain entities expose a _mock() static method for use in tests — not inline dict literals",
+        category="domain-layer",
+        severity="recommended",
+        check_type="code_pattern",
+        verification_hint="Paste the domain entity class that was added or modified in this slice",
+        required_pattern=r"def _mock\s*\(",
+    ),
+    ComplianceCriterion(
+        id="structure/domain/no-fastapi-import",
+        guideline_slug="backend/02-domain-layer",
+        stack="structure",
+        text="Domain entities import nothing from FastAPI or presentation — domain must be framework-free",
+        category="domain-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the full import block from the domain entity file(s) touched in this slice",
+        forbidden_pattern=r"from\s+fastapi\b|import\s+fastapi\b|from\s+src\.presentation\b",
+    ),
+    ComplianceCriterion(
+        id="structure/domain/no-http-exception",
+        guideline_slug="backend/02-domain-layer",
+        stack="structure",
+        text="Domain layer never raises HTTPException — domain errors are plain Python exceptions",
+        category="domain-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the domain entity or domain service code introduced in this slice",
+        forbidden_pattern=r"\bHTTPException\b",
+    ),
+    # ── Application layer ────────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="structure/application/execute-method-exists",
+        guideline_slug="backend/03-application-layer",
+        stack="structure",
+        text="Every use case class exposes an async execute() method as its single public entry point",
+        category="application-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the use case class introduced or modified in this slice",
+        required_pattern=r"async\s+def\s+execute\s*\(",
+    ),
+    ComplianceCriterion(
+        id="structure/application/no-http-exception",
+        guideline_slug="backend/03-application-layer",
+        stack="structure",
+        text="Use case classes never raise or import HTTPException — application layer is framework-free",
+        category="application-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the full use case file (imports + class body) for the slice being reviewed",
+        forbidden_pattern=r"\bHTTPException\b",
+    ),
+    ComplianceCriterion(
+        id="structure/application/imports-interface-not-concrete",
+        guideline_slug="backend/03-application-layer",
+        stack="structure",
+        text="Use cases import repository interfaces from contract.py, not concrete repository classes",
+        category="application-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the import block from the use case file(s) introduced in this slice",
+        forbidden_pattern=r"from\s+src\.infrastructure\.repositories\.\w+_repository\s+import",
+    ),
+    ComplianceCriterion(
+        id="structure/application/dto-extends-baseschema",
+        guideline_slug="backend/03-application-layer",
+        stack="structure",
+        text="All application DTOs extend BaseSchema (not raw Pydantic BaseModel) for consistent serialisation",
+        category="application-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the DTO class definitions introduced in this slice",
+        required_pattern=r"class\s+\w+Dto\s*\(\s*BaseSchema\s*\)",
+    ),
+    ComplianceCriterion(
+        id="structure/application/no-infra-import",
+        guideline_slug="backend/03-application-layer",
+        stack="structure",
+        text="Use case files import nothing from src.infrastructure — only from domain and contract.py",
+        category="application-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the full import block from the use case file(s) touched in this slice",
+        forbidden_pattern=r"from\s+src\.infrastructure\b",
+    ),
+    # ── Presentation layer ───────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="structure/presentation/response-model-declared",
+        guideline_slug="backend/05-presentation-layer",
+        stack="structure",
+        text="Every FastAPI route decorator declares response_model= — no implicit response schemas",
+        category="presentation-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the route handler(s) introduced in this slice",
+        required_pattern=r"response_model\s*=",
+    ),
+    ComplianceCriterion(
+        id="structure/presentation/thin-handlers",
+        guideline_slug="backend/05-presentation-layer",
+        stack="structure",
+        text="Route handlers contain no business logic — they only call a use case and return its result",
+        category="presentation-layer",
+        severity="required",
+        check_type="manual",
+        verification_hint=(
+            "Paste the route handler function body. Confirm it does nothing beyond: "
+            "extract request data, call use case, return DTO. No conditionals or domain logic."
+        ),
+    ),
+    ComplianceCriterion(
+        id="structure/presentation/concrete-only-in-presentation",
+        guideline_slug="backend/06-solid-principles",
+        stack="structure",
+        text="Concrete repository classes are only instantiated in the presentation layer (via DI / Depends) — never in use cases or domain",
+        category="presentation-layer",
+        severity="required",
+        check_type="manual",
+        verification_hint=(
+            "Confirm that use case __init__ receives a repository interface, not a concrete class. "
+            "Paste the use case __init__ signature and the route handler Depends() call that wires the concrete repo."
+        ),
+    ),
+    # ── Frontend layer ───────────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="structure/frontend/actions-use-server",
+        guideline_slug="frontend/01-project-structure",
+        stack="structure",
+        text="Next.js Server Action files declare 'use server' at the top — so they never run client-side",
+        category="frontend-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the content of any actions/*.ts file introduced in this slice",
+        required_pattern=r"""['""]use server['""]""",
+    ),
+    ComplianceCriterion(
+        id="structure/frontend/no-fetch-in-components",
+        guideline_slug="frontend/01-project-structure",
+        stack="structure",
+        text="React components contain no fetch() calls — data fetching lives in services/ or Server Actions",
+        category="frontend-layer",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the component file(s) introduced in this slice",
+        forbidden_pattern=r"\bfetch\s*\(",
+    ),
+    ComplianceCriterion(
+        id="structure/frontend/pages-thin",
+        guideline_slug="frontend/01-project-structure",
+        stack="structure",
+        text="Page components are thin: they import from features/ or components/ but contain no inline business logic",
+        category="frontend-layer",
+        severity="recommended",
+        check_type="manual",
+        verification_hint=(
+            "Paste the page component introduced in this slice. "
+            "Confirm it delegates all logic to imported components or Server Actions."
+        ),
+    ),
+    # ── General / cross-layer ────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="structure/layers/one-use-case-per-file",
+        guideline_slug="backend/06-solid-principles",
+        stack="structure",
+        text="Each use case file contains exactly one use case class — no multi-purpose files",
+        category="project-structure",
+        severity="required",
+        check_type="manual",
+        verification_hint=(
+            "Confirm that the use case file(s) introduced in this slice each contain exactly one class. "
+            "Provide the file path(s) and the class name(s) they contain."
+        ),
+    ),
+    ComplianceCriterion(
+        id="structure/layers/inward-imports-only",
+        guideline_slug="backend/01-project-structure",
+        stack="structure",
+        text="Imports flow inward only: presentation → application → domain; no layer imports from an outer layer",
+        category="project-structure",
+        severity="required",
+        check_type="manual",
+        verification_hint=(
+            "For each new file in this slice, confirm its imports only reference the same layer or an inner layer. "
+            "Provide the file paths and their import lists."
+        ),
+    ),
+]

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from src.domain.entities.compliance import ComplianceCriterion
 from src.domain.entities.example import Example
 from src.domain.entities.guideline import Guideline
 
@@ -29,4 +30,18 @@ class ExampleRepositoryInterface(ABC):
 
     @abstractmethod
     async def get_by_layer(self, layer: str) -> list[Example]:
+        raise NotImplementedError
+
+
+class CriteriaRepositoryInterface(ABC):
+    @abstractmethod
+    async def get_all(self) -> list[ComplianceCriterion]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_by_stack(self, stack: str) -> list[ComplianceCriterion]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_by_id(self, criterion_id: str) -> ComplianceCriterion | None:
         raise NotImplementedError
