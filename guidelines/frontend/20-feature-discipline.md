@@ -36,7 +36,6 @@ Apply this ladder **at every coding decision point** — not just at the start o
 |---|---|---|
 | Email field validation | Install `validator.js`, write `EmailInput` with regex + MX-check wrapper | `z.string().email()` — Zod is already installed (see `frontend/04-forms-validation`) |
 | Debounced search input | Write `useDebounce` hook, `DebouncedInput` component, config file | `useCallback` + `setTimeout` — 3 lines, no install |
-| Auth token check | Install `jwt-decode`, write `TokenManager` class with cache, event emitter | `JSON.parse(atob(token.split(".")[1]))` — one line |
 | Modal state | Install `zustand` or `jotai`, create `modalSlice` | `useState(false)` — already in React |
 
 ---
