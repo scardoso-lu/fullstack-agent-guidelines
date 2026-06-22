@@ -1,6 +1,22 @@
 from src.application.dto import BaseSchema
 
 
+class WorkflowStepDto(BaseSchema):
+    criterion_id: str
+    text: str
+    severity: str
+    action: str        # "run_command" | "provide_code_snippet" | "provide_evidence"
+    command: str | None
+    instruction: str
+    submit: dict       # exact JSON shape the agent fills and passes to verify_compliance
+
+
+class WorkflowDto(BaseSchema):
+    stack: str
+    steps: list[WorkflowStepDto]
+    next_step: str
+
+
 class AssessmentInputDto(BaseSchema):
     criterion_id: str
     # command-type fields
