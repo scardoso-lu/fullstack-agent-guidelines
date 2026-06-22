@@ -62,3 +62,19 @@ async def test_all_criteria_have_valid_check_types(repo):
     valid = {"command", "code_pattern", "manual"}
     for c in result:
         assert c.check_type in valid, f"{c.id} has invalid check_type {c.check_type!r}"
+
+
+@pytest.mark.asyncio
+async def test_get_by_stack_security_returns_only_security_criteria(repo):
+    result = await repo.get_by_stack("security")
+    assert len(result) > 0
+    assert all(c.stack == "security" for c in result)
+
+
+@pytest.mark.asyncio
+async def test_security_criteria_cover_expected_categories(repo):
+    result = await repo.get_by_stack("security")
+    categories = {c.category for c in result}
+    assert "auth" in categories
+    assert "secrets" in categories
+    assert "injection" in categories
