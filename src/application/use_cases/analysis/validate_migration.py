@@ -94,7 +94,7 @@ class ValidateMigrationUseCase:
                     rule_id="backend/migration/alter-column-type-risk",
                     severity="recommended",
                     location=f"line:{i}",
-                    message=f"op.alter_column() — verify the type change is backwards-compatible",
+                    message="op.alter_column() — verify the type change is backwards-compatible",
                     hint=(
                         "Changing a column type can break existing reads. "
                         "Prefer adding a new column, backfilling, and dropping the old one in steps."
