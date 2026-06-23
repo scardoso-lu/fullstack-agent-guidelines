@@ -47,6 +47,8 @@ A non-technical user almost never says "I need an audit-on-write pattern in the 
 | "I'm starting a new feature" / "next ticket" / "PR" | `agile/01-vertical-slices`, `agile/02-definition-of-done`, `agile/03-conventional-commits`, `agile/04-pull-requests`, `backend/27-feature-discipline`, `frontend/20-feature-discipline` |
 | "refactor this" / "rework" / "clean this up" / "simplify" / "remove old code" / "delete the legacy" | `backend/16-rework-clean`, `frontend/11-rework-clean` |
 | "is the PR ready to merge?" / "definition of done" / "DoD" / "gate" / "checklist before merging" | `agile/02-definition-of-done`, `agile/05-dod-backend`, `agile/06-dod-frontend`, `agile/07-dod-security` |
+| "are files in the right place?" / "check folder structure" / "is the repo layout correct?" / "wrong directory" | run `validate_project_structure(stack, file_tree)` — pass `find src/ -type f` output; returns per-file violations with hints |
+| "review this PR" / "is this compliant?" / "check the code against our standards" | `get_compliance_workflow(stack)` → collect evidence → `verify_compliance(assessments=[...])` + `validate_project_structure(stack, file_tree)` |
 | "database migration" / "alembic" / "schema change" / "add a column" / "rename a table" | `backend/29-alembic-migrations`, `backend/23-safe-migrations` |
 
 If none of the rows match, fall through to `get_metadata` and `search_guidelines` (see Step 2).
@@ -72,6 +74,8 @@ Call it once per work session, not once per question.
 | Need to **list everything** in a stack to browse | `list_guidelines(stack="backend"\|"frontend"\|"agile"\|"qa"\|"architecture"\|"infra")` |
 | Starting a **new feature/slice** and want the full context dumped in one go | `get_all_context(stack=...)` (large response — only when you genuinely need all of it, e.g. greenfield setup or a major refactor) |
 | Want an **annotated code example** for a layer (not prose) | `list_examples(stack=..., layer=...)` then `get_example(name=...)` |
+| Want to **check file placement** — are repos in the right folder? DTOs in the right place? | `validate_project_structure(stack, file_tree)` — run `find src/ -type f -name '*.py'` (backend) or `find src/ -type f \( -name '*.ts' -o -name '*.tsx' \)` (frontend) and pass the output as `file_tree` |
+| Want to **score code against DoD criteria** (lint, auth, audit, types, E2E…) | `get_compliance_workflow(stack)` to get the checklist, then `verify_compliance(assessments=[...])` to score the evidence |
 | Sanity-check the server is reachable | `health_check()` |
 
 If `search_guidelines` returns more than ~3 hits, prefer the highest-numbered file in the relevant stack — the numbering reflects when topics were added; newer files often supersede older ones on the same topic, or extend them.

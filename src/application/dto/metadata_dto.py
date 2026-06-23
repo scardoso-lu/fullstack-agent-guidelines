@@ -18,8 +18,17 @@ class ExampleMetaDto(BaseSchema):
     description: str # parsed from "# Description:" comment
 
 
+class StructureRuleMetaDto(BaseSchema):
+    rule_id: str
+    stack: str          # "backend" | "frontend"
+    description: str
+    severity: str       # "required" | "recommended"
+    guideline_slug: str
+
+
 class MetadataDto(BaseSchema):
-    guidelines: dict[str, list[GuidelineMetaDto]]  # keyed by stack
-    examples: dict[str, list[ExampleMetaDto]]       # keyed by stack
+    guidelines: dict[str, list[GuidelineMetaDto]]      # keyed by stack
+    examples: dict[str, list[ExampleMetaDto]]           # keyed by stack
+    structure_rules: list[StructureRuleMetaDto]
     total_guidelines: int
     total_examples: int

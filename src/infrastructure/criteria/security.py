@@ -126,6 +126,75 @@ CRITERIA: list[ComplianceCriterion] = [
         verification_hint="Paste the login and forgot-password route handler(s)",
         required_pattern=r"@\w+\.limit\s*\(|RateLimiter\s*\(",
     ),
+    # ── Security headers ─────────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="security/headers/cors-not-wildcard",
+        guideline_slug="backend/13-owasp-top10",
+        stack="security",
+        text="CORS allow_origins is not a wildcard (*) — only explicit origins are permitted",
+        category="headers",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the FastAPI app setup or CORSMiddleware configuration",
+        forbidden_pattern=r'allow_origins\s*=\s*\[["\']?\s*\*\s*["\']?\]|allow_origin_regex\s*=\s*["\'].*\.\*',
+    ),
+    ComplianceCriterion(
+        id="security/headers/security-middleware",
+        guideline_slug="backend/13-owasp-top10",
+        stack="security",
+        text=(
+            "Security headers middleware is registered: TrustedHostMiddleware or equivalent "
+            "that sets X-Content-Type-Options, X-Frame-Options, and HSTS"
+        ),
+        category="headers",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the FastAPI app setup file where middleware is added",
+        required_pattern=r"TrustedHostMiddleware|X-Content-Type-Options|X-Frame-Options|Strict-Transport-Security|SecurityHeadersMiddleware",
+    ),
+    # ── Hardcoded secrets ─────────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="security/secrets/no-provider-api-keys",
+        guideline_slug="backend/08-security",
+        stack="security",
+        text="No provider API key literals in source (Stripe sk_live_*, AWS AKIA*, GitHub ghp_*, etc.)",
+        category="secrets",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint="Paste the files that integrate with payment, cloud, or third-party providers",
+        forbidden_pattern=(
+            r"sk_live_[a-zA-Z0-9_\-]{10,}"
+            r"|sk_test_[a-zA-Z0-9_\-]{10,}"
+            r"|whsec_[a-zA-Z0-9_\-]{10,}"
+            r"|AKIA[0-9A-Z]{16}"
+            r"|ghp_[a-zA-Z0-9]{36}"
+            r"|AIza[0-9A-Za-z\-_]{35}"
+            r"|xoxb-[0-9a-zA-Z\-]{10,}"
+        ),
+    ),
+    # ── Sensitive data in logs ────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="security/logging/no-sensitive-data-in-logs",
+        guideline_slug="backend/13-owasp-top10",
+        stack="security",
+        text=(
+            "Log statements never interpolate passwords, tokens, secrets, or card numbers — "
+            "even at DEBUG level"
+        ),
+        category="logging",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint=(
+            "Paste the logging calls in the auth, payment, and user management modules. "
+            "Confirm no sensitive field value is formatted into any log message."
+        ),
+        forbidden_pattern=(
+            r'(?:logger|logging|log)\.\w+\s*\([^)]*'
+            r'(?:\{(?:password|passwd|token|secret|api_key|credit_card|cvv)\b'
+            r'|,\s*(?:password|passwd|token|secret|api_key|credit_card|cvv)\b'
+            r'|%\((?:password|passwd|token|secret|api_key|credit_card|cvv)\))'
+        ),
+    ),
     ComplianceCriterion(
         id="security/owasp/auth-events-logged",
         guideline_slug="backend/13-owasp-top10",
