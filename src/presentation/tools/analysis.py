@@ -6,6 +6,7 @@ from src.application.use_cases.analysis.validate_env import ValidateEnvCompleten
 from src.application.use_cases.analysis.validate_imports import ValidateImportDirectionsUseCase
 from src.application.use_cases.analysis.validate_logs import ValidateLogCallsUseCase
 from src.application.use_cases.analysis.validate_migration import ValidateMigrationUseCase
+from src.application.use_cases.analysis.validate_supply_chain import ValidateSupplyChainUseCase
 from src.application.use_cases.analysis.validate_tests import ValidateTestNamesUseCase
 from src.utils.logger import get_logger
 
@@ -225,4 +226,36 @@ def register_analysis_tools(mcp: FastMCP) -> None:
             return data
         except ValueError as exc:
             _logger.warning("tool=validate_coverage_distribution error=%r", str(exc))
+            return {"error": str(exc)}
+
+    @mcp.tool(
+        name="validate_supply_chain",
+        description=(
+            "Scan a package manifest for supply chain risks: VCS/URL/local-path sources that "
+            "bypass registry integrity checks (required), wildcard version specifiers that allow "
+            "future malicious releases to be pulled in automatically (required), and pre-release "
+            "version constraints that receive less security scrutiny (recommended).\n\n"
+            "How to use:\n"
+            "  Backend:  cat pyproject.toml\n"
+            "  Frontend: cat package.json\n\n"
+            "Parameters:\n"
+            "  manifest — content of pyproject.toml or package.json\n\n"
+            "Returns per-line findings with rule_id, location, message, and fix hint. "
+            "Status: 'clean' | 'warnings' | 'violations'."
+        ),
+    )
+    async def validate_supply_chain(manifest: str) -> dict:
+        _logger.info("tool=validate_supply_chain")
+        try:
+            result = await ValidateSupplyChainUseCase().execute(manifest)
+            data = result.model_dump()
+            _logger.info(
+                "tool=validate_supply_chain lines=%d findings=%d status=%r",
+                data["total_items"],
+                len(data["findings"]),
+                data["status"],
+            )
+            return data
+        except ValueError as exc:
+            _logger.warning("tool=validate_supply_chain error=%r", str(exc))
             return {"error": str(exc)}

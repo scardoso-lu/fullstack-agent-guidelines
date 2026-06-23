@@ -95,4 +95,72 @@ CRITERIA: list[ComplianceCriterion] = [
             "in this PR's diff. Provide the git diff --stat line showing the lockfile change."
         ),
     ),
+    # ── Supply chain hardening ────────────────────────────────────────────────
+    ComplianceCriterion(
+        id="architecture/supply-chain/no-vcs-or-url-source",
+        guideline_slug="architecture/01-technology-selection",
+        stack="architecture",
+        text=(
+            "No dependency is installed from a VCS URL (git+https://, github:), "
+            "direct URL, or local path — only registry sources are allowed"
+        ),
+        category="supply-chain",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint=(
+            "Paste the [tool.poetry.dependencies] section of pyproject.toml "
+            "or the dependencies block of package.json for all new packages"
+        ),
+        forbidden_pattern=(
+            r'\b(?:git|hg|svn)\s*=\s*["\']'           # TOML VCS
+            r'|:\s*"(?:git\+https?://|git\+ssh://|git://|github:|bitbucket:|gitlab:)'  # JSON VCS
+            r'|\burl\s*=\s*["\']https?://'             # TOML direct URL
+            r'|:\s*"https?://(?!registry\.npmjs\.org)' # JSON direct URL
+            r'|\bpath\s*=\s*["\']\.\.?/'               # TOML local path
+            r'|:\s*"file:'                              # JSON local path
+        ),
+    ),
+    ComplianceCriterion(
+        id="architecture/supply-chain/no-wildcard-version",
+        guideline_slug="architecture/01-technology-selection",
+        stack="architecture",
+        text="No dependency uses a wildcard or unconstrained version specifier (* or latest)",
+        category="supply-chain",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint=(
+            "Paste the dependency declarations for new packages from pyproject.toml or package.json"
+        ),
+        forbidden_pattern=r'[=:]\s*["\'](?:\*|latest|any)["\']',
+    ),
+    ComplianceCriterion(
+        id="architecture/supply-chain/no-prerelease",
+        guideline_slug="architecture/01-technology-selection",
+        stack="architecture",
+        text="No production dependency pins a pre-release version (alpha/beta/rc/dev)",
+        category="supply-chain",
+        severity="recommended",
+        check_type="code_pattern",
+        verification_hint=(
+            "Paste the dependency declarations for new packages from pyproject.toml or package.json"
+        ),
+        forbidden_pattern=(
+            r'"[\d.]+(?:a\d+|b\d+|rc\d+|\.dev\d*)"'   # PEP 440: 1.0.0b2
+            r'|"[\d.]+-(?:alpha|beta|rc)[\d.]*"'        # npm semver: 1.0.0-beta.1
+        ),
+    ),
+    ComplianceCriterion(
+        id="architecture/supply-chain/lockfile-has-hashes",
+        guideline_slug="architecture/01-technology-selection",
+        stack="architecture",
+        text="Lockfile contains integrity hashes for every dependency (uv.lock hash = / pnpm integrity field)",
+        category="supply-chain",
+        severity="required",
+        check_type="code_pattern",
+        verification_hint=(
+            "Paste 5–10 representative package entries from uv.lock or pnpm-lock.yaml "
+            "to confirm hash/integrity fields are present"
+        ),
+        required_pattern=r'hash\s*=\s*"sha|"integrity"\s*:\s*"sha',
+    ),
 ]
