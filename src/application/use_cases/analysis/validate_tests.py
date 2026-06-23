@@ -8,7 +8,7 @@ from src.utils.logger import get_logger
 
 _logger = get_logger("use_case.validate_test_names")
 
-_TEST_DEF_RE = re.compile(r"^(?:async\s+)?def\s+(test_\w+)\s*\(", re.MULTILINE)
+_TEST_DEF_RE = re.compile(r"^\s*(?:async\s+)?def\s+(test_\w+)\s*\(", re.MULTILINE)
 _MIN_TOKENS = 3  # tokens after "test_" for a name to be considered descriptive
 
 

@@ -9,17 +9,30 @@ async def _run(cobertura_xml: str) -> dict:
 
 
 def _make_xml(packages: list[tuple[str, int, int]]) -> str:
-    """Build minimal Cobertura XML. packages is list of (name, lines_valid, lines_covered)."""
-    pkg_xml = "\n".join(
-        f'<package name="{name}" lines-valid="{valid}" lines-covered="{covered}" />'
-        for name, valid, covered in packages
+    """Build minimal Cobertura XML matching coverage.py's actual output format.
+
+    packages is a list of (name, lines_valid, lines_covered).
+    Coverage is represented via <line hits="N"> elements inside each package,
+    NOT via lines-valid/lines-covered attributes on <package> (those don't exist
+    in coverage.py's Cobertura output — only line-rate is on <package>).
+    """
+    pkg_parts: list[str] = []
+    for name, valid, covered in packages:
+        line_elems = "".join(
+            f'<line number="{j + 1}" hits="{"1" if j < covered else "0"}"/>'
+            for j in range(valid)
+        )
+        pkg_parts.append(
+            f'<package name="{name}" line-rate="0" branch-rate="0" complexity="0">'
+            f'<classes><class name="m.py" filename="{name}.py" '
+            f'line-rate="0" branch-rate="0" complexity="0">'
+            f"<methods/><lines>{line_elems}</lines></class></classes></package>"
+        )
+    return (
+        '<?xml version="1.0" ?><coverage><packages>'
+        + "".join(pkg_parts)
+        + "</packages></coverage>"
     )
-    return f"""<?xml version="1.0" ?>
-<coverage>
-  <packages>
-    {pkg_xml}
-  </packages>
-</coverage>"""
 
 
 # ── all layers passing ────────────────────────────────────────────────────────

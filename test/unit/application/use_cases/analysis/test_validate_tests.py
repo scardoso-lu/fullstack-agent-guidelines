@@ -106,6 +106,39 @@ async def test_sync_test_functions_are_detected():
     assert r["status"] == "clean"
 
 
+# ── class-method tests are detected ──────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_class_method_tests_are_detected():
+    source = (
+        "class TestNotes:\n"
+        "    def test_create_note_returns_id(self):\n"
+        "        pass\n"
+        "\n"
+        "    async def test_get_note_returns_not_found(self):\n"
+        "        pass\n"
+    )
+    r = await _run(source)
+    assert r["total_items"] == 2
+    assert r["status"] == "clean"
+
+
+@pytest.mark.asyncio
+async def test_class_method_duplicate_is_violation():
+    source = (
+        "class TestNotes:\n"
+        "    def test_create_note_returns_id(self):\n"
+        "        pass\n"
+        "\n"
+        "    def test_create_note_returns_id(self):\n"
+        "        pass\n"
+    )
+    r = await _run(source)
+    assert r["status"] == "violations"
+    ids = [f["rule_id"] for f in r["findings"]]
+    assert "qa/tests/no-duplicate-test-names" in ids
+
+
 # ── edge cases ────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

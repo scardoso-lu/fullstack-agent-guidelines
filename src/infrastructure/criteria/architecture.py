@@ -53,7 +53,7 @@ CRITERIA: list[ComplianceCriterion] = [
             "Paste the relevant lines from pyproject.toml [tool.poetry.dependencies] (backend) "
             "or package.json (frontend) for the new packages"
         ),
-        forbidden_pattern=r'"[\w\-]+"\s*:\s*"\^[\d]|"[\w\-]+"\s*:\s*"~[\d]',
+        forbidden_pattern=r'(?:"[\w\-]+"|\b[\w][\w\-]*)\s*[=:]\s*"[\^~][\d]',
     ),
     ComplianceCriterion(
         id="architecture/dependency/installed-via-package-manager",

@@ -46,8 +46,12 @@ class ValidateCoverageDistributionUseCase:
             layer = _package_layer(name)
             if layer is None:
                 continue
-            layer_valid[layer] += int(pkg.get("lines-valid", "0"))
-            layer_covered[layer] += int(pkg.get("lines-covered", "0"))
+            # coverage.py's Cobertura format puts line-rate (a ratio) on <package>,
+            # not lines-valid/lines-covered.  Sum from individual <line hits="N"> elements.
+            for line in pkg.iter("line"):
+                layer_valid[layer] += 1
+                if int(line.get("hits", "0")) > 0:
+                    layer_covered[layer] += 1
 
         total_packages = sum(1 for _ in root.iter("package"))
         findings: list[FindingDto] = []
