@@ -3,9 +3,11 @@ from mcp.server.fastmcp import FastMCP
 from src.application.use_cases.analysis.validate_commits import ValidateCommitMessagesUseCase
 from src.application.use_cases.analysis.validate_coverage import ValidateCoverageDistributionUseCase
 from src.application.use_cases.analysis.validate_env import ValidateEnvCompletenessUseCase
+from src.application.use_cases.analysis.validate_hardcoded_secrets import ValidateHardcodedSecretsUseCase
 from src.application.use_cases.analysis.validate_imports import ValidateImportDirectionsUseCase
 from src.application.use_cases.analysis.validate_logs import ValidateLogCallsUseCase
 from src.application.use_cases.analysis.validate_migration import ValidateMigrationUseCase
+from src.application.use_cases.analysis.validate_sensitive_logging import ValidateSensitiveLoggingUseCase
 from src.application.use_cases.analysis.validate_supply_chain import ValidateSupplyChainUseCase
 from src.application.use_cases.analysis.validate_tests import ValidateTestNamesUseCase
 from src.utils.logger import get_logger
@@ -258,4 +260,69 @@ def register_analysis_tools(mcp: FastMCP) -> None:
             return data
         except ValueError as exc:
             _logger.warning("tool=validate_supply_chain error=%r", str(exc))
+            return {"error": str(exc)}
+
+    @mcp.tool(
+        name="validate_sensitive_logging",
+        description=(
+            "Scan Python source files for log and print statements that interpolate sensitive "
+            "field values: passwords, tokens, secrets, API keys, credit card numbers, CVV, SSN. "
+            "Also flags raw exception dumps (logger.info(str(e))) that can expose "
+            "DB connection strings or credentials embedded in exception messages.\n\n"
+            "How to use:\n"
+            "  cat src/path/to/module.py\n\n"
+            "Parameters:\n"
+            "  source   — content of a Python source file\n"
+            "  filename — file name for display in findings (optional, default: source.py)\n\n"
+            "Returns per-line findings. Status: 'clean' | 'warnings' | 'violations'."
+        ),
+    )
+    async def validate_sensitive_logging(source: str, filename: str = "source.py") -> dict:
+        _logger.info("tool=validate_sensitive_logging filename=%r", filename)
+        try:
+            result = await ValidateSensitiveLoggingUseCase().execute(source, filename)
+            data = result.model_dump()
+            _logger.info(
+                "tool=validate_sensitive_logging lines=%d findings=%d status=%r",
+                data["total_items"],
+                len(data["findings"]),
+                data["status"],
+            )
+            return data
+        except ValueError as exc:
+            _logger.warning("tool=validate_sensitive_logging error=%r", str(exc))
+            return {"error": str(exc)}
+
+    @mcp.tool(
+        name="validate_hardcoded_secrets",
+        description=(
+            "Scan Python or TypeScript source files for hardcoded secrets: "
+            "provider API key literals (Stripe sk_live_*, AWS AKIA*, GitHub ghp_*, "
+            "Slack xoxb-*, Google AIza*), encoded JWT tokens, and sensitive variable "
+            "assignments (password = \"...\", secret = \"...\", api_key = \"...\"). "
+            "Test files are exempt from generic variable checks but never from "
+            "provider key detection.\n\n"
+            "How to use:\n"
+            "  cat src/path/to/module.py\n\n"
+            "Parameters:\n"
+            "  source   — content of a Python or TypeScript source file\n"
+            "  filename — file name for display (optional, default: source.py); "
+            "             include 'test_' in the name to enable test-file mode\n\n"
+            "Returns per-line findings. Status: 'clean' | 'violations'."
+        ),
+    )
+    async def validate_hardcoded_secrets(source: str, filename: str = "source.py") -> dict:
+        _logger.info("tool=validate_hardcoded_secrets filename=%r", filename)
+        try:
+            result = await ValidateHardcodedSecretsUseCase().execute(source, filename)
+            data = result.model_dump()
+            _logger.info(
+                "tool=validate_hardcoded_secrets lines=%d findings=%d status=%r",
+                data["total_items"],
+                len(data["findings"]),
+                data["status"],
+            )
+            return data
+        except ValueError as exc:
+            _logger.warning("tool=validate_hardcoded_secrets error=%r", str(exc))
             return {"error": str(exc)}
