@@ -7,6 +7,7 @@ class StructureViolationDto(BaseSchema):
     file_path: str
     message: str
     hint: str
+    guideline_slug: str | None = None
 
 
 class StructureReportDto(BaseSchema):

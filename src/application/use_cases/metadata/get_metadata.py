@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from src.application.dto.metadata_dto import ExampleMetaDto, GuidelineMetaDto, MetadataDto
+from src.application.dto.metadata_dto import (
+    ExampleMetaDto,
+    GuidelineMetaDto,
+    MetadataDto,
+    StructureRuleMetaDto,
+)
+from src.application.use_cases.structure.validate import get_all_rules
 from src.infrastructure.repositories.contract import (
     ExampleRepositoryInterface,
     GuidelineRepositoryInterface,
@@ -47,9 +53,21 @@ class GetMetadataUseCase:
                 )
             )
 
+        structure_rules = [
+            StructureRuleMetaDto(
+                rule_id=r.id,
+                stack=r.id.split("/")[0],  # "backend" or "frontend"
+                description=r.description,
+                severity=r.severity,
+                guideline_slug=r.guideline_slug,
+            )
+            for r in get_all_rules()
+        ]
+
         return MetadataDto(
             guidelines=dict(g_by_stack),
             examples=dict(e_by_stack),
+            structure_rules=structure_rules,
             total_guidelines=len(guidelines),
             total_examples=len(examples),
         )

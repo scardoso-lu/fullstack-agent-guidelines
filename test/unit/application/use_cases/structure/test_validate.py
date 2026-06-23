@@ -106,7 +106,6 @@ async def test_router_in_presentation_routes_is_clean():
 async def test_infra_file_in_domain_is_violation():
     r = await _run("backend", ["src/domain/note_repository.py"])
     ids = [v["rule_id"] for v in r["violations"]]
-    # Triggers both no-loose-domain-files AND no-infra-in-domain
     assert "backend/structure/no-infra-in-domain" in ids
 
 
@@ -123,6 +122,69 @@ async def test_pascal_case_python_file_is_recommended_violation():
 @pytest.mark.asyncio
 async def test_snake_case_python_file_is_clean():
     r = await _run("backend", ["src/application/use_cases/note/create_note.py"])
+    assert r["status"] == "compliant"
+
+
+# ── Codex fix: safe pattern must not match nested look-alike paths ───────────
+
+@pytest.mark.asyncio
+async def test_repo_nested_inside_application_is_still_violation():
+    # Codex P2: src/application/infrastructure/repositories/note_repository.py
+    # must NOT be considered safe — the canonical layer is application, not infrastructure
+    r = await _run("backend", ["src/application/infrastructure/repositories/note_repository.py"])
+    assert r["status"] == "non-compliant"
+    ids = [v["rule_id"] for v in r["violations"]]
+    assert "backend/structure/repo-in-infrastructure" in ids
+
+
+@pytest.mark.asyncio
+async def test_dto_nested_inside_infrastructure_is_still_violation():
+    r = await _run("backend", ["src/infrastructure/application/dto/note_dto.py"])
+    assert r["status"] == "non-compliant"
+    ids = [v["rule_id"] for v in r["violations"]]
+    assert "backend/structure/dto-in-application" in ids
+
+
+@pytest.mark.asyncio
+async def test_service_nested_inside_components_is_still_violation():
+    # Codex P2 (frontend): src/components/services/UserService.ts
+    # must NOT be considered safe — canonical first dir is components, not services
+    r = await _run("frontend", ["src/components/services/UserService.ts"])
+    assert r["status"] == "non-compliant"
+    ids = [v["rule_id"] for v in r["violations"]]
+    assert "frontend/structure/services-in-services-dir" in ids
+
+
+# ── Codex fix: root-level app page filename ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_index_tsx_directly_under_app_is_violation():
+    # Codex P2: src/app/index.tsx (no intermediate path) was not caught by old pattern
+    r = await _run("frontend", ["src/app/index.tsx"])
+    assert r["status"] == "non-compliant"
+    ids = [v["rule_id"] for v in r["violations"]]
+    assert "frontend/structure/pages-as-page-tsx" in ids
+
+
+@pytest.mark.asyncio
+async def test_home_tsx_directly_under_app_is_violation():
+    r = await _run("frontend", ["src/app/home.tsx"])
+    assert r["status"] == "non-compliant"
+    ids = [v["rule_id"] for v in r["violations"]]
+    assert "frontend/structure/pages-as-page-tsx" in ids
+
+
+@pytest.mark.asyncio
+async def test_index_tsx_nested_under_app_is_violation():
+    r = await _run("frontend", ["src/app/[lang]/(private)/admin/index.tsx"])
+    assert r["status"] == "non-compliant"
+    ids = [v["rule_id"] for v in r["violations"]]
+    assert "frontend/structure/pages-as-page-tsx" in ids
+
+
+@pytest.mark.asyncio
+async def test_page_tsx_in_app_is_clean():
+    r = await _run("frontend", ["src/app/[lang]/(private)/admin/page.tsx"])
     assert r["status"] == "compliant"
 
 
@@ -171,25 +233,17 @@ async def test_actions_in_actions_dir_is_clean():
 
 
 @pytest.mark.asyncio
-async def test_index_tsx_in_app_is_violation():
-    r = await _run("frontend", ["src/app/[lang]/(private)/admin/index.tsx"])
-    assert r["status"] == "non-compliant"
-    ids = [v["rule_id"] for v in r["violations"]]
-    assert "frontend/structure/pages-as-page-tsx" in ids
-
-
-@pytest.mark.asyncio
-async def test_page_tsx_in_app_is_clean():
-    r = await _run("frontend", ["src/app/[lang]/(private)/admin/page.tsx"])
-    assert r["status"] == "compliant"
-
-
-@pytest.mark.asyncio
 async def test_ts_logic_file_directly_in_app_is_violation():
     r = await _run("frontend", ["src/app/helpers.ts"])
     assert r["status"] == "non-compliant"
     ids = [v["rule_id"] for v in r["violations"]]
     assert "frontend/structure/no-ts-logic-in-app-root" in ids
+
+
+@pytest.mark.asyncio
+async def test_layout_ts_in_app_is_clean():
+    r = await _run("frontend", ["src/app/layout.ts"])
+    assert r["status"] == "compliant"
 
 
 # ── frontend: recommended violations ─────────────────────────────────────────
@@ -266,6 +320,15 @@ async def test_no_violations_gives_compliant_status():
     ])
     assert r["status"] == "compliant"
     assert r["violations"] == []
+
+
+# ── guideline_slug is included in violations ─────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_violation_includes_guideline_slug():
+    r = await _run("backend", ["src/application/note_repository.py"])
+    v = next(v for v in r["violations"] if v["rule_id"] == "backend/structure/repo-in-infrastructure")
+    assert v["guideline_slug"] == "backend/01-project-structure"
 
 
 # ── edge cases ────────────────────────────────────────────────────────────────
