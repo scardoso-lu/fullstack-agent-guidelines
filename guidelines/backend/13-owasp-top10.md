@@ -140,13 +140,15 @@ DATABASE_URL = "postgresql://user:pass@host"  # hardcoded in source — committe
 def password(self, plain: str) -> None:
     self._password_hash = bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
-# Short-lived tokens with expiry
-def create_access_token(sub: str, secret: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(minutes=15)
-    return jwt.encode({"sub": sub, "exp": exp}, secret, algorithm="HS256")
+# FastAPI does not issue tokens — it validates them.
+# Tokens are issued by the IdP (Entra ID) and signed with RS256.
+# Validate via JWKS; never generate a shared-secret JWT in application code.
+def _jwks_client() -> jwt.PyJWKClient:
+    return jwt.PyJWKClient(JWKS_URL, cache_jwk_set=True, lifespan=3600)
 
 # Secrets from environment only — pydantic-settings enforces presence at startup
-JWT_SECRET: str = Field(...)          # no default — process refuses to start if missing
+AZURE_AD_TENANT_ID: str = Field(...)  # no default — process refuses to start if missing
+AZURE_AD_CLIENT_ID: str = Field(...)  # same
 DATABASE_URL: str = Field(...)        # same
 ```
 
@@ -220,42 +222,53 @@ async def get_all_invoices(self, tenant_id: int) -> list[Invoice]:
 
 ## A07:2025 — Authentication Failures
 
-Broken login flows, weak passwords, missing token expiry, session tokens not invalidated on logout.
+Broken authentication flows, weak token validation, missing expiry checks, sessions not invalidated on logout.
 
 **Vulnerable:**
 ```python
+# ❌ Trusting a token without verifying the signature
+payload = jwt.decode(token, options={"verify_signature": False})   # anyone can forge this
+
+# ❌ Rolling a shared-secret HS256 token in application code
 def create_token(user_id: int) -> str:
-    return jwt.encode({"sub": user_id}, SECRET)   # no expiry — valid forever
-
-async def login(email: str, password: str):
-    user = await repo.get_by_email(email)
-    if user.password == password:                  # plain text comparison — should never happen
-        return create_token(user.id)
+    return jwt.encode({"sub": user_id}, "my-secret")   # shared secret = single point of failure
 ```
 
-**Fixed:**
+**Fixed — validate OIDC tokens via JWKS:**
 ```python
-def create_access_token(sub: str, secret: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(minutes=15)    # short-lived
-    return jwt.encode({"sub": sub, "exp": exp, "type": "access"}, secret, algorithm="HS256")
+import os
+from functools import lru_cache
+import jwt
+from fastapi import HTTPException, status
 
-def create_refresh_token(sub: str, secret: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(days=30)
-    return jwt.encode({"sub": sub, "exp": exp, "type": "refresh"}, secret, algorithm="HS256")
+TENANT_ID = os.environ["AZURE_AD_TENANT_ID"]
+CLIENT_ID = os.environ["AZURE_AD_CLIENT_ID"]
+JWKS_URL  = f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
+ISSUER    = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
 
-def decode_token(token: str, secret: str) -> dict:
+
+@lru_cache
+def _jwks_client() -> jwt.PyJWKClient:
+    return jwt.PyJWKClient(JWKS_URL, cache_jwk_set=True, lifespan=3600)
+
+
+def validate_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
-        if payload.get("type") != "access":
-            raise UnauthorizedAccessError("Wrong token type")
-        return payload
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
+        return jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=CLIENT_ID,
+            issuer=ISSUER,        # rejects tokens from any other tenant
+        )
     except jwt.ExpiredSignatureError:
-        raise UnauthorizedAccessError("Token expired")
-    except jwt.InvalidTokenError:
-        raise UnauthorizedAccessError("Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 ```
 
-On logout, store the revoked refresh token in Redis with a TTL matching its expiry. On refresh, check the revocation list before issuing new tokens.
+Token expiry, rotation, and logout are managed by the IdP and the Next.js BFF (Auth.js). FastAPI's responsibility is only validation — if the signature or the `aud`/`iss` claims are wrong, reject the request.
 
 ---
 
@@ -381,13 +394,14 @@ async def get_user(user_id: int, session=Depends(get_session)) -> UserDto:
 ## Quick Checklist
 
 - [ ] All data queries are scoped to `owner_id` / `tenant_id` — checked in use cases, not routes
-- [ ] `JWT_SECRET`, `DATABASE_URL`, and all secrets use `Field(...)` with no default — crash at startup if missing
+- [ ] `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `DATABASE_URL`, and all secrets use `Field(...)` with no default — crash at startup if missing
 - [ ] `poetry.lock` committed, `pip-audit` runs in CI — breaks build on any CVE
 - [ ] CI actions pinned to SHA, not floating tags
 - [ ] SBOM generated and stored with each release
 - [ ] No string interpolation in SQL — SQLAlchemy ORM or bound `:param` placeholders only
-- [ ] Rate limiting on `/auth/login` and `/auth/forgot-password`
-- [ ] Access tokens expire in ≤15 minutes, refresh tokens are revocable
+- [ ] Rate limiting on any sensitive unauthenticated endpoints
+- [ ] OIDC token validated via JWKS — `aud` and `iss` both checked; no shared-secret HS256 tokens issued by the app
+- [ ] `PyJWKClient` instantiated with `@lru_cache` — JWKS keys not fetched on every request
 - [ ] No `pickle.loads()` on untrusted data — Pydantic `model_validate_json()` instead
 - [ ] Auth functions never `pass` on exceptions — always fail closed with `HTTPException(401)`
 - [ ] Global unhandled exception handler strips stack traces in production

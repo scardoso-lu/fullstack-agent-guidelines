@@ -37,37 +37,42 @@ const payload = token ? decodeToken(token) : null;
 if (payload?.role !== "admin") return redirect("/login");
 ```
 
-**Fixed — middleware verifies the signature before trusting any claim:**
+**Fixed — Auth.js middleware verifies the session before any page is served:**
 ```ts
 // src/middleware.ts
-import { jwtVerify } from "jose";
+export { auth as middleware } from "@/auth";
 
-// Fail closed: throw at module load so the edge function refuses to start
-// rather than silently verifying against an empty key.
-const rawSecret = process.env.JWT_SECRET;
-if (!rawSecret) throw new Error("JWT_SECRET env var is not set");
-const secret = new TextEncoder().encode(rawSecret);
-
-export async function middleware(request: NextRequest) {
-  const token = request.cookies.get("x-access-token")?.value;
-
-  if (request.nextUrl.pathname.startsWith("/admin")) {
-    if (!token) return NextResponse.redirect(new URL("/login", request.url));
-    try {
-      const { payload } = await jwtVerify<{ role?: string }>(token, secret);
-      if (payload.role !== "admin") {
-        return NextResponse.redirect(new URL("/403", request.url));
-      }
-    } catch {
-      // covers expired, malformed, and forged tokens
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
-  return NextResponse.next();
-}
+export const config = {
+  matcher: ["/((?!_next|api/auth|favicon.ico|.*\\..*).*)"],
+};
 ```
 
-`jwtVerify` from `jose` verifies the HMAC-SHA256 signature and expiry atomically and runs in Edge Runtime. `JWT_SECRET` is a server-only env var — never `NEXT_PUBLIC_`. Never render privileged content and hide it with CSS or a conditional — gate it at the network edge.
+For custom redirect behaviour (e.g. role-scoped sections):
+
+```ts
+// src/middleware.ts — extended variant with role check
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+
+export default auth((req) => {
+  if (!req.auth) {
+    const loginUrl = new URL("/api/auth/signin", req.url);
+    loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+  // Role-scoped gate: verify the session's role claim for admin routes
+  if (req.nextUrl.pathname.startsWith("/admin") && req.auth.user?.role !== "admin") {
+    return NextResponse.redirect(new URL("/403", req.url));
+  }
+  return NextResponse.next();
+});
+
+export const config = {
+  matcher: ["/((?!_next|api/auth|favicon.ico|.*\\..*).*)"],
+};
+```
+
+Auth.js verifies the session cookie cryptographically on every request and runs in Edge Runtime. The browser never holds a raw JWT — it only holds the encrypted Auth.js session cookie. Never render privileged content and hide it with CSS or a conditional — gate it at the network edge.
 
 For the full RBAC pattern — permission-based visibility, `<PermissionGate>`, and `usePermission()` hook — see `frontend/19-rbac-permissions`.
 
@@ -153,25 +158,22 @@ See the dedicated `08-supply-chain.md` guideline for full detail. Summary:
 localStorage.setItem("token", accessToken);
 sessionStorage.setItem("token", accessToken);
 
-// ❌ WRONG — token decoded and stored client-side where it can be tampered
-const userData = JSON.parse(atob(token.split(".")[1]));
-localStorage.setItem("user", JSON.stringify(userData));
+// ❌ WRONG — raw JWT stored in a readable cookie
+import Cookies from "js-cookie";
+Cookies.set("x-access-token", rawJwt, { sameSite: "Strict" });
+// JS can read js-cookie values — the token is visible to any script on the page
 ```
 
 **Fixed:**
 ```ts
-// ✅ HttpOnly cookie — JS cannot read it at all (set by the server)
-// If the API sets the cookie server-side, JS never touches it.
+// ✅ Auth.js sets an encrypted, HttpOnly, Secure session cookie automatically.
+// The browser never sees a raw JWT. JS cannot read the cookie at all.
+// No manual cookie management is needed — Auth.js handles it.
 
-// If the API returns the token in the response body, store in a SameSite cookie:
-import Cookies from "js-cookie";
-Cookies.set("x-access-token", token, {
-  sameSite: "Strict",   // not sent on cross-site requests
-  secure: true,          // HTTPS only
-  expires: 1,            // 1 day — match token expiry
-});
-
-// Never store in localStorage — it survives indefinitely and is XSS-accessible
+// ✅ Fetch user data server-side via /api/me — never decode a client-visible token
+fetch("/api/me", { credentials: "include" })
+  .then(r => r.json())
+  .then(user => setUser(user));
 ```
 
 Sensitive data should never appear in URLs (`/reset?token=abc123` leaks to server logs, Referer headers, and browser history). Always use POST body or request headers.
@@ -240,33 +242,27 @@ async function deleteAllData() {
 ## A07:2025 — Authentication Failures
 
 ```ts
-// ❌ WRONG — no expiry check; token treated as valid indefinitely
-const token = Cookies.get("x-access-token");
-if (token) setUser(decodeToken(token));
-
-// ✅ Always check expiry before trusting the token
+// ❌ WRONG — manually decoding a client-visible JWT to check expiry
 import { isTokenExpired } from "@/lib/jwt";
-
 const token = Cookies.get("x-access-token");
-if (token && !isTokenExpired(token)) {
-  setUser(decodeToken(token));
-} else {
-  Cookies.remove("x-access-token");   // discard expired token
-}
+if (token && !isTokenExpired(token)) setUser(decodeToken(token));
+// A forged cookie with a future exp passes this check — no signature verification
+
+// ✅ Auth.js manages session expiry and cryptographic validity automatically.
+// The middleware rejects invalid or expired sessions before any page serves.
+// Client code reads user data from /api/me — never decodes a raw token.
 ```
 
 ```ts
-// ✅ Middleware rejects expired tokens at the Edge — before the page serves
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get("x-access-token")?.value;
-  if (!token || isTokenExpired(token)) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-  return NextResponse.next();
-}
+// ✅ Middleware delegates session verification to Auth.js
+export { auth as middleware } from "@/auth";
+
+export const config = {
+  matcher: ["/((?!_next|api/auth|favicon.ico|.*\\..*).*)"],
+};
 ```
 
-Implement a logout that removes the cookie AND performs a hard redirect to clear all React state. Soft navigation (`router.push`) can leave stale context.
+Implement logout via Auth.js's `signOut()` which clears the session cookie server-side, then performs a redirect to purge all client state. Never clear auth state with only a client-side cookie removal — the server session must also be invalidated.
 
 ---
 
@@ -356,15 +352,14 @@ Every route segment should have an `error.tsx` boundary. The root `app/error.tsx
 
 ## Quick Checklist
 
-- [ ] Route protection is in `middleware.ts` using `jwtVerify` (signature verified) — never `decodeToken` alone, never only in the component
-- [ ] `JWT_SECRET` is validated at module load before `TextEncoder().encode()` — missing secret throws rather than silently producing an empty key
+- [ ] Route protection is in `middleware.ts` via Auth.js `auth()` — session cryptographically verified before every non-public request
+- [ ] No raw JWTs on the client — browser holds only the encrypted Auth.js session cookie; user data comes from `/api/me`
 - [ ] Role-based UI visibility uses `<PermissionGate>` and `usePermission()` from `frontend/19-rbac-permissions` — never inline `user.role === "admin"` checks
 - [ ] Security headers set in `next.config.ts` (CSP, X-Frame-Options, HSTS, CORS)
-- [ ] `NEXT_PUBLIC_` prefix only on values intentionally visible to users — never on secrets
-- [ ] Tokens stored in `SameSite: Strict` cookies — never `localStorage`
+- [ ] `NEXT_PUBLIC_` prefix only on values intentionally visible to users — never on secrets, tenant IDs, or client IDs
 - [ ] `dangerouslySetInnerHTML` used only with `DOMPurify.sanitize()` — never on raw API data
 - [ ] URLs from user input validated to `https://` or `http://` before rendering
-- [ ] `isTokenExpired()` called before trusting any stored token
+- [ ] Logout uses Auth.js `signOut()` — server-side session invalidation, not just a client-side cookie clear
 - [ ] Error boundaries on every route segment — stack traces never shown to users
-- [ ] Auth failures logged to monitoring (never logging passwords)
+- [ ] Auth failures logged to monitoring (never logging passwords or tokens)
 - [ ] Lockfile committed — `npm audit` runs in CI

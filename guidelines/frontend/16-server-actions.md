@@ -51,7 +51,7 @@ Or grouped per feature module (`features/datasets/server-actions.ts`). The `_` p
 
 **One action per file** when an action is non-trivial. Multiple tiny related actions can share a file when they're cohesive (`create-dataset`, `update-dataset`, `archive-dataset` in one `dataset-actions.ts`).
 
-> The `getActorFromCookie()` helper used below is the Server-Action equivalent of the client-side `useUser()` hook covered in `frontend/05-authentication`. It reads the httpOnly cookie via `next/headers`' `cookies()`, validates the token via `isTokenExpired()` from `src/lib/jwt`, and returns the decoded actor (or `null`). Build it once in `src/lib/auth/actor.ts` so every Server Action and route handler shares the same auth check.
+> The `getActorFromCookie()` helper used below is the Server-Action equivalent of the client-side `useUser()` hook covered in `frontend/05-authentication`. It calls `await auth()` from `@/auth` to read the server-side Auth.js session (no cookie parsing or token expiry checking required — Auth.js handles that). It then calls `apiFetch<Actor>("/me")` to load the user's full permissions from FastAPI via the OBO token. Build it once in `src/lib/auth/actor.ts` so every Server Action and route handler shares the same auth check.
 
 ## The skeleton — every Server Action follows it
 
