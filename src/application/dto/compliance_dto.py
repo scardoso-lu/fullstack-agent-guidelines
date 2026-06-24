@@ -53,3 +53,12 @@ class ComplianceReportDto(BaseSchema):
     overall_status: str  # "compliant" | "partial" | "non-compliant"
     stacks: dict[str, StackReportDto]
     unknown_ids: list[str]
+
+
+class ComplianceTableDto(BaseSchema):
+    table: str
+
+
+class ComplianceTableValidationDto(BaseSchema):
+    valid: bool
+    errors: list[str]
