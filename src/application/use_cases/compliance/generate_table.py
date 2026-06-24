@@ -76,8 +76,17 @@ def _evaluate(criterion: ComplianceCriterion, assessment: dict) -> tuple[str, st
     return ("pass" if passed else "fail"), evidence
 
 
+def _sanitize_cell(s: str) -> str:
+    """Collapse whitespace and escape pipes so the value is safe inside a Markdown table cell."""
+    return s.replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
+
+
 def _truncate(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _cell(s: str, max_len: int) -> str:
+    return _truncate(_sanitize_cell(s), max_len)
 
 
 class GenerateComplianceTableUseCase:
@@ -173,9 +182,9 @@ class GenerateComplianceTableUseCase:
                 sev = "🔴 req" if criterion.severity == "required" else "🟡 rec"
                 status_cell = f"{_STATUS_ICON.get(status, '⏳')} {status}"
                 lines.append(
-                    f"| {i} | {_truncate(criterion.text, 70)} "
+                    f"| {i} | {_cell(criterion.text, 70)} "
                     f"| {criterion.category} | {sev} | {criterion.check_type} "
-                    f"| {status_cell} | {_truncate(reason, 80)} |"
+                    f"| {status_cell} | {_cell(reason, 80)} |"
                 )
 
             lines += ["", "</details>", ""]

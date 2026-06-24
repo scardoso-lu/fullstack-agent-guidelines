@@ -37,7 +37,16 @@ class ValidateComplianceTableUseCase:
         if _REQUIRED_HEADING not in body:
             errors.append(f"Missing required heading: `{_REQUIRED_HEADING}`")
 
-        if "| Stack |" not in body and "| stack |" not in body.lower():
+        # Extract only the summary table rows (Stack header → "---" divider or end of body)
+        # so that detail-section rows cannot mask a missing summary entry.
+        summary_match = re.search(
+            r"(\| Stack \|.*?)(?:\n---|\Z)",
+            body,
+            re.DOTALL | re.IGNORECASE,
+        )
+        summary_section = summary_match.group(1) if summary_match else ""
+
+        if not summary_section:
             errors.append("Summary table is missing a `Stack` column header row")
 
         for stack in required_stacks:
@@ -47,7 +56,7 @@ class ValidateComplianceTableUseCase:
                 + r")(?:\*\*)?\s*\|",
                 re.IGNORECASE,
             )
-            if not pattern.search(body):
+            if not pattern.search(summary_section):
                 errors.append(f"Stack `{stack}` is not listed in the summary table")
 
         if not _SCORE_RE.search(body):
