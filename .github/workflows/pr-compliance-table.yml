@@ -1,0 +1,279 @@
+name: PR Compliance Table
+
+# Generates a guidelines-compliance table on every PR and enforces its format.
+#
+# Jobs:
+#   generate  — runs automated checks, posts/updates the compliance comment
+#   enforce   — validates the comment format; fails if table is missing or malformed
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ── Job 1: generate & post the compliance table ───────────────────────────
+  generate:
+    name: Generate Compliance Table
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so git diff against base works
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "1.8.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      # ── Run automated checks and capture their output ──────────────────────
+      - name: Lint (ruff check)
+        continue-on-error: true
+        run: poetry run ruff check ./src 2>&1 | tee /tmp/lint-output.txt || true
+
+      - name: Format (ruff format --check)
+        continue-on-error: true
+        run: poetry run ruff format --check . 2>&1 | tee /tmp/format-output.txt || true
+
+      - name: Complexity (ruff --select C90)
+        continue-on-error: true
+        run: poetry run ruff check . --select C90 2>&1 | tee /tmp/complexity-output.txt || true
+
+      - name: Tests (pytest with coverage)
+        continue-on-error: true
+        run: poetry run task pytest 2>&1 | tee /tmp/test-output.txt || true
+
+      # ── Scan diff for code-pattern criteria ───────────────────────────────
+      - name: Collect changed Python files content
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD --name-only -- '*.py' \
+            | xargs -I{} cat {} 2>/dev/null \
+            > /tmp/diff-py-content.txt || true
+
+      - name: Collect changed TS/TSX files content
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD --name-only -- '*.ts' '*.tsx' \
+            | xargs -I{} cat {} 2>/dev/null \
+            > /tmp/diff-ts-content.txt || true
+
+      - name: Collect CI workflow YAML content
+        run: cat .github/workflows/*.yml 2>/dev/null > /tmp/ci-yaml-content.txt || true
+
+      - name: Collect pyproject.toml content
+        run: cat pyproject.toml 2>/dev/null > /tmp/pyproject-content.txt || true
+
+      # ── Build the assessments JSON ─────────────────────────────────────────
+      - name: Build assessments.json
+        run: |
+          python3 - <<'PYEOF'
+          import json, pathlib
+
+          def read(path: str) -> str:
+              try:
+                  return pathlib.Path(path).read_text(errors="replace")
+              except OSError:
+                  return ""
+
+          lint     = read("/tmp/lint-output.txt")
+          fmt      = read("/tmp/format-output.txt")
+          complex_ = read("/tmp/complexity-output.txt")
+          tests    = read("/tmp/test-output.txt")
+          py_diff  = read("/tmp/diff-py-content.txt")
+          ts_diff  = read("/tmp/diff-ts-content.txt")
+          ci_yaml  = read("/tmp/ci-yaml-content.txt")
+          pyproj   = read("/tmp/pyproject-content.txt")
+
+          assessments = [
+              # backend — command checks
+              {"criterion_id": "backend/dod/lint-clean",       "command_output": lint},
+              {"criterion_id": "backend/dod/format-clean",     "command_output": fmt},
+              {"criterion_id": "backend/dod/unit-tests-green", "command_output": tests},
+              {"criterion_id": "backend/dod/coverage-met",     "command_output": tests},
+              {"criterion_id": "backend/dod/complexity-cap",   "command_output": complex_},
+              # backend — code-pattern checks (scan changed Python files)
+              {"criterion_id": "backend/dod/auth-on-routes",   "code_snippet": py_diff},
+              {"criterion_id": "backend/dod/audit-on-write",   "code_snippet": py_diff},
+              # security — code-pattern checks
+              {"criterion_id": "security/secrets/no-hardcoded-defaults",  "code_snippet": py_diff},
+              {"criterion_id": "security/auth/bcrypt-for-passwords",      "code_snippet": py_diff},
+              {"criterion_id": "security/auth/jwt-verified-decode",       "code_snippet": py_diff},
+              {"criterion_id": "security/auth/token-expiry-set",          "code_snippet": py_diff},
+              {"criterion_id": "security/auth/no-bare-except-in-auth",    "code_snippet": py_diff},
+              {"criterion_id": "security/owasp/no-sql-interpolation",     "code_snippet": py_diff},
+              {"criterion_id": "security/owasp/no-pickle-loads",          "code_snippet": py_diff},
+              {"criterion_id": "security/owasp/global-exception-handler", "code_snippet": py_diff},
+              {"criterion_id": "security/owasp/pip-audit-in-ci",          "code_snippet": ci_yaml},
+              {"criterion_id": "security/headers/cors-not-wildcard",      "code_snippet": py_diff},
+              {"criterion_id": "security/headers/security-middleware",     "code_snippet": py_diff},
+              {"criterion_id": "security/secrets/no-provider-api-keys",   "code_snippet": py_diff},
+              {"criterion_id": "security/logging/no-sensitive-data-in-logs", "code_snippet": py_diff},
+              # structure — code-pattern checks
+              {"criterion_id": "structure/domain/frozen-dataclass-or-base",     "code_snippet": py_diff},
+              {"criterion_id": "structure/domain/no-mutable-list-default",       "code_snippet": py_diff},
+              {"criterion_id": "structure/domain/mock-method-exists",            "code_snippet": py_diff},
+              {"criterion_id": "structure/domain/no-fastapi-import",             "code_snippet": py_diff},
+              {"criterion_id": "structure/domain/no-http-exception",             "code_snippet": py_diff},
+              {"criterion_id": "structure/application/execute-method-exists",    "code_snippet": py_diff},
+              {"criterion_id": "structure/application/no-http-exception",        "code_snippet": py_diff},
+              {"criterion_id": "structure/application/imports-interface-not-concrete", "code_snippet": py_diff},
+              {"criterion_id": "structure/application/dto-extends-baseschema",   "code_snippet": py_diff},
+              {"criterion_id": "structure/application/no-infra-import",          "code_snippet": py_diff},
+              {"criterion_id": "structure/presentation/response-model-declared", "code_snippet": py_diff},
+              {"criterion_id": "structure/frontend/actions-use-server",          "code_snippet": ts_diff},
+              {"criterion_id": "structure/frontend/no-fetch-in-components",      "code_snippet": ts_diff},
+              # frontend — command + code-pattern
+              {"criterion_id": "frontend/dod/no-any", "code_snippet": ts_diff},
+              # qa — code-pattern
+              {"criterion_id": "qa/review/no-print-console-log", "code_snippet": py_diff + ts_diff},
+              {"criterion_id": "qa/e2e/role-based-selectors",    "code_snippet": ts_diff},
+              {"criterion_id": "qa/e2e/no-sleep",                "code_snippet": ts_diff},
+              # agile — code-pattern (commit messages checked separately)
+              # infra — code-pattern
+              {"criterion_id": "infra/makefile/gate-target-exists", "code_snippet": read("Makefile") if pathlib.Path("Makefile").exists() else ""},
+              {"criterion_id": "infra/makefile/ci-calls-make",      "code_snippet": ci_yaml},
+              {"criterion_id": "infra/makefile/help-target-exists",  "code_snippet": read("Makefile") if pathlib.Path("Makefile").exists() else ""},
+              {"criterion_id": "infra/docker/test-stage-in-dockerfile", "code_snippet": read("Dockerfile") if pathlib.Path("Dockerfile").exists() else ""},
+              # architecture — code-pattern
+              {"criterion_id": "architecture/dependency/version-pinned",               "code_snippet": pyproj},
+              {"criterion_id": "architecture/dependency/installed-via-package-manager", "code_snippet": ci_yaml},
+              {"criterion_id": "architecture/dependency/audit-clean",                   "command_output": ""},  # pending
+              {"criterion_id": "architecture/supply-chain/no-vcs-or-url-source",        "code_snippet": pyproj},
+              {"criterion_id": "architecture/supply-chain/no-wildcard-version",         "code_snippet": pyproj},
+              {"criterion_id": "architecture/supply-chain/no-prerelease",               "code_snippet": pyproj},
+              {"criterion_id": "architecture/supply-chain/lockfile-has-hashes",         "code_snippet": read("poetry.lock")[:4000] if pathlib.Path("poetry.lock").exists() else ""},
+          ]
+
+          pathlib.Path("/tmp/assessments.json").write_text(json.dumps(assessments, ensure_ascii=False))
+          print(f"Built {len(assessments)} assessments")
+          PYEOF
+
+      # ── Generate the markdown table ────────────────────────────────────────
+      - name: Generate markdown table
+        run: |
+          poetry run python scripts/generate_compliance_table.py /tmp/assessments.json \
+            > /tmp/compliance-table.md
+          echo "--- table preview (first 30 lines) ---"
+          head -30 /tmp/compliance-table.md
+
+      # ── Post or update the PR comment ─────────────────────────────────────
+      - name: Post or update PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/compliance-table.md', 'utf8');
+            const marker = '<!-- compliance-table-start -->';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              console.log(`Updated compliance table comment #${existing.id}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              console.log('Created compliance table comment');
+            }
+
+      # ── Upload the table as an artifact (useful for debugging) ─────────────
+      - name: Upload compliance table artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compliance-table
+          path: /tmp/compliance-table.md
+          retention-days: 14
+
+  # ── Job 2: enforce table format ───────────────────────────────────────────
+  enforce:
+    name: Enforce Compliance Table Format
+    runs-on: ubuntu-latest
+    needs: generate   # always runs after the table has been posted
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "1.8.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Fetch compliance table comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- compliance-table-start -->';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const tableComment = comments.find(c => c.body && c.body.includes(marker));
+
+            if (!tableComment) {
+              core.setFailed(
+                'No compliance table comment found on this PR. ' +
+                'The "generate" job must have failed — check its logs.'
+              );
+              return;
+            }
+
+            fs.writeFileSync('/tmp/pr-table-comment.md', tableComment.body);
+            console.log(`Found compliance table comment #${tableComment.id}`);
+
+      - name: Validate compliance table format
+        run: |
+          poetry run python scripts/validate_compliance_table.py /tmp/pr-table-comment.md
