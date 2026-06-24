@@ -1,7 +1,9 @@
 from mcp.server.fastmcp import FastMCP
 
 from src.application.dto.compliance_dto import AssessmentInputDto
+from src.application.use_cases.compliance.generate_table import GenerateComplianceTableUseCase
 from src.application.use_cases.compliance.get_workflow import GetComplianceWorkflowUseCase
+from src.application.use_cases.compliance.validate_table import ValidateComplianceTableUseCase
 from src.application.use_cases.compliance.verify import VerifyComplianceUseCase
 from src.infrastructure.repositories.criteria_repository import get_criteria_repository
 from src.utils.logger import get_logger
@@ -74,4 +76,59 @@ def register_compliance_tools(mcp: FastMCP) -> None:
             return data
         except (ValueError, TypeError) as exc:
             _logger.warning("tool=verify_compliance error=%r", str(exc))
+            return {"error": str(exc)}
+
+    @mcp.tool(
+        name="generate_compliance_table",
+        description=(
+            "Generate a Guidelines Compliance Report as a markdown document, ready to post "
+            "as a GitHub PR comment. Evaluates every criterion against the provided assessments "
+            "and renders a summary table plus per-stack collapsible detail sections. "
+            "Assessments follow the same format as verify_compliance(): each item needs a "
+            "criterion_id plus the relevant payload (command_output for command checks, "
+            "code_snippet for code-pattern checks, or passed+evidence for manual checks). "
+            "Omit assessments or pass an empty list to produce a fully-pending table that "
+            "shows all criteria awaiting evaluation. "
+            "Returns { table: '<markdown string>' } bounded by "
+            "<!-- compliance-table-start --> / <!-- compliance-table-end --> markers."
+        ),
+    )
+    async def generate_compliance_table(
+        assessments: list[dict] | None = None,
+    ) -> dict:
+        items = assessments or []
+        _logger.info("tool=generate_compliance_table assessments=%d", len(items))
+        try:
+            use_case = GenerateComplianceTableUseCase(get_criteria_repository())
+            result = await use_case.execute(items)
+            _logger.info("tool=generate_compliance_table table_len=%d", len(result.table))
+            return result.model_dump()
+        except Exception as exc:
+            _logger.warning("tool=generate_compliance_table error=%r", str(exc))
+            return {"error": str(exc)}
+
+    @mcp.tool(
+        name="validate_compliance_table",
+        description=(
+            "Validate that a compliance table markdown document is correctly formatted. "
+            "Checks: start/end HTML comment markers, required heading, all expected stacks "
+            "listed in the summary table, and at least one score column. "
+            "Returns { valid: bool, errors: list[str] }. "
+            "Use after generate_compliance_table() to confirm output integrity, "
+            "or before posting a manually-edited table as a PR comment."
+        ),
+    )
+    async def validate_compliance_table(table: str) -> dict:
+        _logger.info("tool=validate_compliance_table table_len=%d", len(table))
+        try:
+            use_case = ValidateComplianceTableUseCase(get_criteria_repository())
+            result = await use_case.execute(table)
+            _logger.info(
+                "tool=validate_compliance_table valid=%r errors=%d",
+                result.valid,
+                len(result.errors),
+            )
+            return result.model_dump()
+        except Exception as exc:
+            _logger.warning("tool=validate_compliance_table error=%r", str(exc))
             return {"error": str(exc)}
