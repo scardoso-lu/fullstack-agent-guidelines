@@ -66,22 +66,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, account }) {
-      // Persist the IdP access token so OBO can use it later
+      // Persist the IdP access token in the encrypted session cookie so OBO can use it
       if (account?.access_token) {
         token.idpAccessToken = account.access_token;
       }
       return token;
     },
     async session({ session, token }) {
-      // Expose only what the server components need; never expose raw tokens to the client
       session.userId = token.sub as string;
+      // Expose the IdP token on the server-side session so getApiToken() can read it.
+      // Never forward session.idpAccessToken in API responses returned to the browser.
+      session.idpAccessToken = token.idpAccessToken as string | undefined;
       return session;
+    },
+    // Required for the bare `export { auth as middleware }` to redirect unauthenticated requests.
+    authorized({ auth }) {
+      return !!auth;
     },
   },
 });
 
 // src/app/api/auth/[...nextauth]/route.ts
-export { handlers as GET, handlers as POST } from "@/auth";
+// handlers is { GET, POST } — destructure, never re-export the object as a named export
+import { handlers } from "@/auth";
+export const { GET, POST } = handlers;
 ```
 
 For Google or other OIDC providers, swap `AzureAD(...)` for the relevant Auth.js provider and update the OBO logic below — the rest of the flow is identical.
@@ -106,7 +114,7 @@ const msalClient = new ConfidentialClientApplication({
 
 export async function getApiToken(): Promise<string> {
   const session = await auth();
-  const idpToken = (session as any)?.idpAccessToken as string | undefined;
+  const idpToken = session?.idpAccessToken;
   if (!idpToken) throw new Error("No IdP token in session");
 
   const result = await msalClient.acquireTokenOnBehalfOf({
@@ -171,6 +179,8 @@ export async function getItems() {
 
 ```ts
 // src/middleware.ts
+// The bare export works because auth.ts defines callbacks.authorized: ({ auth }) => !!auth.
+// Without that callback, this only attaches auth state — it does NOT redirect unauthenticated requests.
 export { auth as middleware } from "@/auth";
 
 export const config = {
@@ -178,7 +188,7 @@ export const config = {
 };
 ```
 
-Auth.js handles the redirect to the IdP login page automatically when the session is missing. To customise the redirect (e.g. preserve the original URL):
+Auth.js handles the redirect to the IdP sign-in page automatically when `authorized` returns `false`. To customise the redirect (e.g. preserve the original URL or check a role), use the wrapper variant instead:
 
 ```ts
 // src/middleware.ts — custom redirect
