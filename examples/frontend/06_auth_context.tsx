@@ -1,11 +1,11 @@
-// Description: Auth context — UserContext provider, useUser hook, session state from /api/me
+// Description: Auth context — UserProvider, useUser hook, session state from /api/me
 // ─────────────────────────────────────────────────────────────────────────────
-// PATTERN: The JWT is HttpOnly — JS cannot decode it to read user fields.
-// AuthProvider fetches /api/me (which reads the cookie server-side) on mount
-// to populate the client-side user state. One provider at the root layout;
-// every component reads it via useUser().
+// PATTERN: The session cookie is HttpOnly and encrypted by Auth.js — JS cannot
+// read it directly. UserProvider fetches /api/me (a Next.js Route Handler that
+// reads the server-side session) on mount to populate client-side user state.
+// One provider at the root layout; every component reads it via useUser().
 // ─────────────────────────────────────────────────────────────────────────────
-// File location: src/context/auth-context.tsx
+// File location: src/providers/user-provider.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 "use client";
@@ -20,15 +20,16 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type UserPayload = {
-  id: number;
+export type User = {
+  id: string;           // stable identifier (oid from Entra, sub from other IdPs)
+  name: string;
   email: string;
-  role: "admin" | "viewer";
+  image?: string;
 };
 
 type AuthState =
   | { status: "loading" }
-  | { status: "authenticated"; user: UserPayload }
+  | { status: "authenticated"; user: User }
   | { status: "unauthenticated" };
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -36,18 +37,18 @@ type AuthState =
 const AuthContext = createContext<AuthState>({ status: "loading" });
 
 // ── Provider ──────────────────────────────────────────────────────────────────
-// Wrap the root layout with <AuthProvider> — not individual pages.
+// Wrap the root layout with <UserProvider> — not individual pages.
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function UserProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
 
   useEffect(() => {
-    // /api/me is a Next.js Route Handler that reads the HttpOnly cookie
-    // server-side and returns the decoded user payload (or 401)
+    // /api/me is a Next.js Route Handler that calls auth() server-side and
+    // returns the public user fields — never raw tokens.
     fetch("/api/me", { credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error("unauthenticated");
-        return r.json() as Promise<UserPayload>;
+        return r.json() as Promise<User>;
       })
       .then((user) => setState({ status: "authenticated", user }))
       .catch(() => setState({ status: "unauthenticated" }));
@@ -56,14 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 
 export function useUser(): AuthState {
   return useContext(AuthContext);
 }
 
-// Convenience accessor — throws if called outside AuthProvider
-export function useRequiredUser(): UserPayload {
+// Throws when called outside an authenticated session — use in protected pages.
+export function useRequiredUser(): User {
   const state = useContext(AuthContext);
   if (state.status !== "authenticated") {
     throw new Error("useRequiredUser called outside an authenticated session");
@@ -81,53 +82,60 @@ export function UserMenu() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm">{auth.user.email}</span>
-      <span className="rounded bg-muted px-2 py-0.5 text-xs">{auth.user.role}</span>
+      {auth.user.image && (
+        <img src={auth.user.image} alt="" className="h-6 w-6 rounded-full" />
+      )}
+      <span className="text-sm">{auth.user.name}</span>
     </div>
   );
 }
 
-// ── /api/me route handler (app/api/me/route.ts) ───────────────────────────────
-// The server-side counterpart that reads the HttpOnly cookie and returns user info.
+// ── /api/me route handler (src/app/api/me/route.ts) ──────────────────────────
+// Reads the server-side Auth.js session and returns safe user fields.
+// The session cookie and any access tokens never leave the server.
 //
-// import { cookies } from "next/headers";
+// import { auth } from "@/auth";
 // import { NextResponse } from "next/server";
 //
 // export async function GET() {
-//   const cookieStore = await cookies();
-//   const token = cookieStore.get("x-access-token")?.value;
-//   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-//
-//   try {
-//     const payload = JSON.parse(atob(token.split(".")[1])) as UserPayload;
-//     // ponytail: no signature verification here — middleware already checked expiry;
-//     //           add full jwt.verify() if this endpoint is exposed to untrusted callers
-//     return NextResponse.json(payload);
-//   } catch {
-//     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+//   const session = await auth();
+//   if (!session?.user) {
+//     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 //   }
+//   return NextResponse.json({
+//     id: session.userId,        // populated in the session callback in auth.ts
+//     name: session.user.name,
+//     email: session.user.email,
+//     image: session.user.image,
+//   });
 // }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ANTI-PATTERNS:
 //
-// 1. Decoding the JWT in the client to get user fields:
+// 1. Forwarding the raw IdP access token to FastAPI:
 //
-//   const token = document.cookie.match(/x-access-token=([^;]+)/)?.[1];
-//   const user = JSON.parse(atob(token.split(".")[1]));   // ← requires non-HttpOnly cookie
-//   → HttpOnly cookies cannot be read by JS. Use /api/me to get user data.
+//   headers["Authorization"] = `Bearer ${session.idpAccessToken}`;
+//   → The token's `aud` is the BFF app, not FastAPI — validation fails.
+//   → Use the OBO flow (see src/lib/obo.ts) to get an API-scoped token.
 //
-// 2. Storing user state in localStorage:
+// 2. Trusting a plain header for user identity in FastAPI:
 //
-//   localStorage.setItem("user", JSON.stringify(user));  // ← persists across sessions,
-//                                                        //   accessible to XSS attacks
-//   → Use React context (in-memory). Re-fetch from /api/me on page load.
+//   @app.get("/items")
+//   def list_items(user_id: str = Header(...)):  # ← anyone can forge this
+//       ...
+//   → FastAPI must validate a signed Bearer JWT on every request.
 //
-// 3. One AuthProvider per page instead of at the root layout:
+// 3. Storing the session state in localStorage:
+//
+//   localStorage.setItem("user", JSON.stringify(user));  // ← XSS-readable
+//   → Keep state in React context (in-memory). Re-fetch from /api/me on load.
+//
+// 4. Mounting UserProvider per-page instead of at the root layout:
 //
 //   // app/(private)/admin/page.tsx
 //   export default function Page() {
-//     return <AuthProvider><AdminContent /></AuthProvider>;  // ← re-fetches on every nav
+//     return <UserProvider><AdminContent /></UserProvider>;  // ← re-fetches on every nav
 //   }
-//   → Mount AuthProvider once in app/layout.tsx. State persists across client navigations.
+//   → Mount once in app/layout.tsx so state persists across client navigations.
 // ─────────────────────────────────────────────────────────────────────────────
