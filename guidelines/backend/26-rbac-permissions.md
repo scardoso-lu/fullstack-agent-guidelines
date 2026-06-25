@@ -162,42 +162,60 @@ def upgrade() -> None:
     )
 ```
 
-### 3 — JWT Contains Role Slug Only
+### 3 — OIDC Token Carries the User's `oid`; Permissions Are Fetched from DB
 
-The token carries identifiers, not permissions. Permissions are fetched fresh from the database on every request so changes via the admin UI take effect immediately — not after token expiry.
+Tokens are issued by the IdP (Entra ID), not by FastAPI. The token is validated against the IdP's JWKS endpoint. The `oid` (object ID) claim is used to look up the user in the database and load their role and permissions fresh on every request — so permission changes made via the admin UI take effect immediately.
 
-**`src/infrastructure/services/token_service.py`**
-```python
-def create_access_token(user: User) -> str:
-    payload = {
-        "sub": str(user.id),
-        "role": user.role.slug,
-        "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-    }
-    return jwt.encode(payload, get_config().JWT_SECRET, algorithm="HS256")
-```
-
-The `get_current_user` dependency resolves the full user — with role and its permissions — from the DB on every authenticated request. It follows the same `Annotated[AsyncSession, Depends(get_session)]` pattern used everywhere in the presentation layer (see `backend/05-presentation-layer`):
+FastAPI never creates access tokens. It only validates them (see `backend/08-security` for the full validation dependency).
 
 **`src/infrastructure/services/auth_dependency.py`**
 ```python
-from typing import Annotated
-from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer
+import os
+from functools import lru_cache
+from typing import Annotated, Any
+
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.infrastructure.db.engine import get_session
 from src.infrastructure.repositories.user_repository import UserRepository
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+TENANT_ID = os.environ["AZURE_AD_TENANT_ID"]
+CLIENT_ID = os.environ["AZURE_AD_CLIENT_ID"]
+JWKS_URL  = f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
+ISSUER    = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
+
+bearer_scheme = HTTPBearer()
+
+
+@lru_cache
+def _jwks_client() -> jwt.PyJWKClient:
+    return jwt.PyJWKClient(JWKS_URL, cache_jwk_set=True, lifespan=3600)
+
 
 async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> User:
-    payload = decode_token(token)
-    user = await UserRepository(session).get_by_id(payload["sub"])
+) -> "User":
+    token = credentials.credentials
+    try:
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
+        claims = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=CLIENT_ID,
+            issuer=ISSUER,
+        )
+    except jwt.exceptions.PyJWTError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+
+    # oid is the stable, IdP-issued object ID — use it to load the local user record
+    user = await UserRepository(session).get_by_oid(claims["oid"])
     if user is None or not user.role.is_active:
-        raise UnauthorizedError("User or role not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User or role not found")
     return user   # user.role.permissions is loaded via joined relationship
 ```
 
@@ -308,7 +326,7 @@ Protecting a new endpoint always requires code because the endpoint itself is co
 - [ ] No permission strings are defined as code constants — they are rows in the `permissions` table
 - [ ] `Permission` and `Role` are separate DB tables; assignments live in `role_permissions`
 - [ ] No `is_admin` boolean on `User` — role is a FK relationship
-- [ ] JWT contains `role` slug only — permissions are fetched fresh from DB on every request
+- [ ] `get_current_user` validates the OIDC JWT via JWKS (`aud` and `iss` checked) and loads the user by `oid` — permissions are fetched fresh from DB on every request
 - [ ] Every protected route uses `Depends(require_permission("slug"))`
 - [ ] Use cases re-check permissions when ownership or business context is involved
 - [ ] Admin UI exists to manage permissions, roles, assignments, and user role assignment at runtime

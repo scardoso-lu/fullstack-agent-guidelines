@@ -3,339 +3,392 @@ model: opus
 effort: high
 ---
 
-# Authentication — JWT, Cookies, and Route Protection
+# Authentication — OIDC Authorization Code Flow with OBO
 
-Use when implementing login, protecting routes, or reading the current user. Covers JWT cookie setup, Edge middleware route guard, AuthProvider with useUser hook, and the /api/me pattern for HttpOnly cookies.
+Use when implementing login, protecting routes, or making authenticated calls from Next.js (BFF) to FastAPI. Covers the full OIDC Authorization Code Flow, the On-Behalf-Of (OBO) token exchange, Edge middleware route guard, and FastAPI JWT validation.
 
-The app uses JWT access tokens stored in a cookie (`x-access-token`). Authentication flows through three layers: middleware (Edge, catches everything), `UserContext` (client-side user state), and individual pages/components (consume the context or redirect).
-
----
-
-## How Tokens Flow
-
-```
-Login form → POST /auth/login → response sets "x-access-token" cookie
-                ↓
-Middleware reads cookie on every request → redirects to /login if missing or expired
-                ↓
-Server Components read cookies() for server-side API calls
-Client Components read UserContext for user data
-```
+The app uses Next.js as a Backend-for-Frontend (BFF). The browser never sees access tokens — Next.js holds them server-side in an encrypted session and exchanges them for API-scoped tokens via the OBO flow before calling FastAPI. FastAPI validates every incoming JWT against the identity provider's public keys.
 
 ---
 
-## Token Helpers (`src/lib/`)
+## Architectural Flow
+
+```
+Browser → Next.js BFF
+  User logs in via OIDC redirect (Entra / Google / Okta / any OIDC IdP)
+  BFF stores tokens in encrypted, HttpOnly session cookie
+  Browser only ever holds this opaque session cookie — never a raw JWT
+
+Next.js BFF → Identity Provider (OBO exchange)
+  BFF takes the user's access token from the session
+  Calls /token with grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer
+  IdP returns a new token scoped specifically for the FastAPI app
+
+Next.js BFF → FastAPI
+  Attaches the OBO token as Authorization: Bearer <token>
+  FastAPI receives a cryptographically signed, audience-scoped JWT
+
+FastAPI → Validation
+  Fetches IdP's JWKS endpoint to verify the signature
+  Checks aud claim matches the FastAPI app registration
+  Zero Trust: even if the BFF is bypassed, callers need a valid signed JWT
+```
+
+---
+
+## Identity Provider Setup
+
+Two App Registrations are required (shown here for Microsoft Entra; adjust for other IdPs):
+
+| Registration | Purpose | Key settings |
+|---|---|---|
+| `nextjs-bff` | Client | Redirect URI: `https://app.example.com/api/auth/callback/azure-ad` |
+| `fastapi-api` | Resource | Expose an API scope, e.g. `api://<fastapi-client-id>/access_as_user` |
+
+Grant `nextjs-bff` the `access_as_user` delegated permission on `fastapi-api` and admin-consent it.
+
+---
+
+## Next.js — OIDC Login (Auth.js / next-auth)
 
 ```ts
-// src/lib/jwt.ts
-import { jwtDecode } from "jwt-decode";
+// src/auth.ts  — shared auth config consumed by the route handler and middleware
+import NextAuth from "next-auth";
+import AzureAD from "next-auth/providers/azure-ad";
 
-type JwtPayload = {
-  sub: string;
-  exp: number;
-  email?: string;
-};
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  providers: [
+    AzureAD({
+      clientId: process.env.AZURE_AD_CLIENT_ID!,
+      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
+      tenantId: process.env.AZURE_AD_TENANT_ID!,
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, account }) {
+      // Persist the IdP access token in the encrypted session cookie so OBO can use it
+      if (account?.access_token) {
+        token.idpAccessToken = account.access_token;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.userId = token.sub as string;
+      // Expose the IdP token on the server-side session so getApiToken() can read it.
+      // Never forward session.idpAccessToken in API responses returned to the browser.
+      session.idpAccessToken = token.idpAccessToken as string | undefined;
+      return session;
+    },
+    // Required for the bare `export { auth as middleware }` to redirect unauthenticated requests.
+    authorized({ auth }) {
+      return !!auth;
+    },
+  },
+});
 
-export function isTokenExpired(token: string): boolean {
-  try {
-    const { exp } = jwtDecode<JwtPayload>(token);
-    return Date.now() / 1000 > exp;
-  } catch {
-    return true;   // malformed token = treat as expired
-  }
-}
+// src/app/api/auth/[...nextauth]/route.ts
+// handlers is { GET, POST } — destructure, never re-export the object as a named export
+import { handlers } from "@/auth";
+export const { GET, POST } = handlers;
+```
 
-export function decodeToken(token: string): JwtPayload | null {
-  try {
-    return jwtDecode<JwtPayload>(token);
-  } catch {
-    return null;
-  }
+For Google or other OIDC providers, swap `AzureAD(...)` for the relevant Auth.js provider and update the OBO logic below — the rest of the flow is identical.
+
+---
+
+## Next.js — OBO Token Acquisition
+
+```ts
+// src/lib/obo.ts
+import { ConfidentialClientApplication } from "@azure/msal-node";
+import { auth } from "@/auth";
+
+const msalClient = new ConfidentialClientApplication({
+  auth: {
+    clientId: process.env.AZURE_AD_CLIENT_ID!,
+    clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
+    authority: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}`,
+  },
+  cache: { cachePlugin: undefined }, // swap in a Redis cache plugin for production
+});
+
+export async function getApiToken(): Promise<string> {
+  const session = await auth();
+  const idpToken = session?.idpAccessToken;
+  if (!idpToken) throw new Error("No IdP token in session");
+
+  const result = await msalClient.acquireTokenOnBehalfOf({
+    oboAssertion: idpToken,
+    scopes: [`api://${process.env.AZURE_AD_FASTAPI_CLIENT_ID}/access_as_user`],
+  });
+
+  if (!result?.accessToken) throw new Error("OBO token acquisition failed");
+  return result.accessToken;
 }
 ```
 
+Cache the resulting token (e.g. keyed by `session.userId + scope`) to avoid hitting the IdP on every request. MSAL's in-memory cache handles this by default; swap in a Redis cache plugin for multi-instance deployments.
+
+---
+
+## Next.js — BFF Proxy Route
+
+Server Actions or Route Handlers should call FastAPI through a thin proxy that injects the OBO token:
+
 ```ts
-// src/lib/cookies.ts
-import Cookies from "js-cookie";
+// src/lib/api-client.ts
+import { getApiToken } from "@/lib/obo";
 
-const TOKEN_KEY = "x-access-token";
+const FASTAPI_BASE = process.env.FASTAPI_BASE_URL!;
 
-export const cookieStore = {
-  getToken: () => Cookies.get(TOKEN_KEY) ?? null,
-  setToken: (token: string, expiresInDays = 1) =>
-    Cookies.set(TOKEN_KEY, token, { expires: expiresInDays, sameSite: "Strict" }),
-  removeToken: () => Cookies.remove(TOKEN_KEY),
-};
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await getApiToken();
+
+  const response = await fetch(`${FASTAPI_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init.headers,
+      Authorization: `Bearer ${token}`,   // OBO token — scoped to FastAPI
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`FastAPI error: ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+```
+
+Usage in a Server Action:
+
+```ts
+// src/app/actions/items.ts
+"use server";
+import { apiFetch } from "@/lib/api-client";
+
+export async function getItems() {
+  return apiFetch<Item[]>("/items");
+}
 ```
 
 ---
 
 ## Middleware — Route Protection at the Edge
 
-The middleware runs before any page renders. It checks the token and redirects unauthenticated requests:
-
 ```ts
 // src/middleware.ts
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { isTokenExpired } from "@/lib/jwt";
-
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"];
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const lang = request.nextUrl.locale ?? "en";
-
-  // Strip lang prefix for matching
-  const pathWithoutLang = pathname.replace(/^\/(en|fr|es)/, "") || "/";
-
-  const isPublic = PUBLIC_PATHS.some((p) => pathWithoutLang.startsWith(p));
-  const token = request.cookies.get("x-access-token")?.value;
-
-  if (!isPublic) {
-    if (!token || isTokenExpired(token)) {
-      const loginUrl = new URL(`/${lang}/login`, request.url);
-      loginUrl.searchParams.set("from", pathname);   // remember where they were
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  // Redirect authenticated users away from auth pages
-  if (isPublic && token && !isTokenExpired(token)) {
-    return NextResponse.redirect(new URL(`/${lang}/admin`, request.url));
-  }
-
-  return NextResponse.next();
-}
+// The bare export works because auth.ts defines callbacks.authorized: ({ auth }) => !!auth.
+// Without that callback, this only attaches auth state — it does NOT redirect unauthenticated requests.
+export { auth as middleware } from "@/auth";
 
 export const config = {
-  matcher: ["/((?!_next|api|favicon.ico|.*\\..*).*)"],  // exclude Next.js internals
+  matcher: ["/((?!_next|api/auth|favicon.ico|.*\\..*).*)"],
 };
 ```
 
-**Key design decisions:**
-- Middleware runs at the Edge — zero server boot time
-- `from` param lets the login form redirect back after success
-- Both "no token" and "expired token" redirect the same way — no information leak
+Auth.js handles the redirect to the IdP sign-in page automatically when `authorized` returns `false`. To customise the redirect (e.g. preserve the original URL or check a role), use the wrapper variant instead:
+
+```ts
+// src/middleware.ts — custom redirect
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+
+export default auth((req) => {
+  if (!req.auth) {
+    const loginUrl = new URL("/api/auth/signin", req.url);
+    loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+  return NextResponse.next();
+});
+
+export const config = {
+  matcher: ["/((?!_next|api/auth|favicon.ico|.*\\..*).*)"],
+};
+```
 
 ---
 
-## `UserContext` — Client-Side Auth State
+## FastAPI — JWT Validation
+
+```python
+# api/auth.py
+import os
+from functools import lru_cache
+from typing import Annotated, Any
+
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+TENANT_ID = os.environ["AZURE_AD_TENANT_ID"]
+AUDIENCE  = os.environ["AZURE_AD_FASTAPI_CLIENT_ID"]  # the fastapi-api app registration client id
+JWKS_URL  = f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
+
+bearer_scheme = HTTPBearer()
+
+
+@lru_cache
+def _jwks_client() -> jwt.PyJWKClient:
+    return jwt.PyJWKClient(JWKS_URL, cache_jwk_set=True, lifespan=3600)
+
+
+def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> dict[str, Any]:
+    token = credentials.credentials
+    try:
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=AUDIENCE,
+            issuer=f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
+        )
+        return payload
+    except jwt.exceptions.PyJWTError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+
+# Usage in a route
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/items")
+def list_items(user: Annotated[dict, Depends(get_current_user)]):
+    owner_id = user["oid"]   # object ID — stable cross-token identifier
+    return fetch_items(owner_id)
+```
+
+Useful claims available after validation:
+
+| Claim | Meaning |
+|---|---|
+| `oid` | Object ID — stable user identifier across tokens |
+| `preferred_username` | UPN / email |
+| `groups` | Group membership (requires Entra config) |
+| `scp` | Delegated scopes granted |
+
+---
+
+## Client-Side Auth State
+
+Because the session cookie is HttpOnly, client components cannot decode it. Fetch user data from a Next.js route handler that reads the server-side session:
+
+```ts
+// src/app/api/me/route.ts
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return NextResponse.json({
+    id: session.userId,
+    name: session.user.name,
+    email: session.user.email,
+    image: session.user.image,
+  });
+}
+```
 
 ```tsx
 // src/providers/user-provider.tsx
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { decodeToken } from "@/lib/jwt";
-import { cookieStore } from "@/lib/cookies";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 
-type User = {
-  sub: string;
-  email: string;
-};
+type User = { id: string; name: string; email: string; image?: string };
+type AuthState =
+  | { status: "loading" }
+  | { status: "authenticated"; user: User }
+  | { status: "unauthenticated" };
 
-type UserContextValue = {
-  user: User | null;
-  isLoading: boolean;
-  logout: () => void;
-};
-
-const UserContext = createContext<UserContextValue | null>(null);
+const AuthContext = createContext<AuthState>({ status: "loading" });
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [state, setState] = useState<AuthState>({ status: "loading" });
 
   useEffect(() => {
-    const token = cookieStore.getToken();
-    if (token) {
-      const payload = decodeToken(token);
-      if (payload) {
-        setUser({ sub: payload.sub, email: payload.email ?? "" });
-      }
-    }
-    setIsLoading(false);
+    fetch("/api/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((user: User) => setState({ status: "authenticated", user }))
+      .catch(() => setState({ status: "unauthenticated" }));
   }, []);
 
-  const logout = useCallback(() => {
-    cookieStore.removeToken();
-    setUser(null);
-    window.location.href = "/en/login";
-  }, []);
-
-  return (
-    <UserContext.Provider value={{ user, isLoading, logout }}>
-      {children}
-    </UserContext.Provider>
-  );
+  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }
 
-export function useUser(): UserContextValue {
-  const ctx = useContext(UserContext);
-  if (!ctx) throw new Error("useUser must be used inside <UserProvider>");
-  return ctx;
+export function useUser(): AuthState {
+  return useContext(AuthContext);
 }
-```
 
-The `UserProvider` wraps the root layout — it's available everywhere without prop drilling:
-
-```tsx
-// src/app/layout.tsx
-import { UserProvider } from "@/providers/user-provider";
-import { QueryProvider } from "@/providers/query-provider";
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html>
-      <body>
-        <QueryProvider>
-          <UserProvider>
-            {children}
-          </UserProvider>
-        </QueryProvider>
-      </body>
-    </html>
-  );
-}
-```
-
----
-
-## Login Form
-
-```tsx
-// src/components/app/login-form.tsx
-"use client";
-
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter, useSearchParams } from "next/navigation";
-import { z } from "zod";
-import { AuthService } from "@/services/auth";
-import { cookieStore } from "@/lib/cookies";
-import { ApiError } from "@/services/api";
-
-const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-type LoginData = z.infer<typeof LoginSchema>;
-
-export function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("from") ?? "/en/admin";
-
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } =
-    useForm<LoginData>({ resolver: zodResolver(LoginSchema) });
-
-  const onSubmit = async ({ email, password }: LoginData) => {
-    try {
-      const { access_token } = await AuthService.login(email, password);
-      cookieStore.setToken(access_token);
-      router.push(redirectTo);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setError("root", { message: "Invalid email or password" });
-      } else {
-        setError("root", { message: "Something went wrong. Try again." });
-      }
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-      <input {...register("email")} type="email" placeholder="Email" />
-      {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
-
-      <input {...register("password")} type="password" placeholder="Password" />
-
-      {errors.root && <p className="text-red-500 text-sm">{errors.root.message}</p>}
-
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Signing in…" : "Sign in"}
-      </button>
-    </form>
-  );
-}
-```
-
----
-
-## Using Auth State in Components
-
-```tsx
-// src/components/app/user-menu.tsx
-"use client";
-
-import { useUser } from "@/providers/user-provider";
-
-export function UserMenu() {
-  const { user, logout, isLoading } = useUser();
-
-  if (isLoading) return null;
-  if (!user) return null;
-
-  return (
-    <div>
-      <span>{user.email}</span>
-      <button onClick={logout}>Sign out</button>
-    </div>
-  );
-}
-```
-
----
-
-## 401 Handling in Services
-
-When an API call returns 401, the user's token has been revoked or expired mid-session. Intercept it at the `authApi` wrapper:
-
-```ts
-// src/services/api.ts
-export async function authApi<T>(url: string, options: RequestInit = {}): Promise<TypedResponse<T>> {
-  // ...
-  if (!response.ok) {
-    if (response.status === 401) {
-      cookieStore.removeToken();
-      window.location.href = "/en/login";  // hard redirect clears all client state
-      throw new ApiError(401, "Session expired");
-    }
-    // other errors...
+export function useRequiredUser(): User {
+  const state = useContext(AuthContext);
+  if (state.status !== "authenticated") {
+    throw new Error("useRequiredUser called outside an authenticated session");
   }
-  return response;
+  return state.user;
 }
 ```
-
-This is the global 401 handler — individual components never need to handle session expiry.
 
 ---
 
-## Anti-Pattern: Storing Tokens in localStorage
+## Provider-Agnostic Design
+
+This architecture is not specific to Entra ID. Any OIDC-compliant provider works because the BFF only needs the provider's well-known discovery URL:
+
+| Provider | Discovery URL |
+|---|---|
+| Microsoft Entra | `https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration` |
+| Google | `https://accounts.google.com/.well-known/openid-configuration` |
+| Okta | `https://{domain}/.well-known/openid-configuration` |
+| Auth0 | `https://{domain}/.well-known/openid-configuration` |
+
+To switch providers, change the Auth.js provider config — the middleware, client code, and FastAPI validation logic are unaffected.
+
+**Multi-provider note:** If you support multiple IdPs simultaneously (e.g. "Login with Google" AND "Login with Microsoft"), add a user-mapping layer (a `users` table keyed by email or a stable `sub`+`iss` pair) so accounts from different providers can be linked.
+
+**OBO with non-Entra providers:** Google does not support the OBO flow. For Google-issued tokens, issue a short-lived service-to-service token (e.g. a signed JWT from your BFF) or use a shared API key over a private network. The FastAPI validation logic stays the same; only the token source changes.
+
+---
+
+## Anti-Patterns
 
 ```ts
-// ❌ WRONG — localStorage is accessible to any JS on the page (XSS vulnerability)
-localStorage.setItem("token", accessToken);
+// ❌ Shared secret header — trivially bypassable if the BFF is compromised or circumvented
+headers["X-Internal-User-Id"] = userId;
 
-// ❌ WRONG — checking token in every component instead of using middleware
-export default function AdminPage() {
-  const token = localStorage.getItem("token");
-  if (!token) return redirect("/login");
-  // ...
-}
+// ❌ Forwarding the user's IdP token to FastAPI instead of an OBO token
+//    The token's aud will be the BFF app, not FastAPI — validation will fail
+headers["Authorization"] = `Bearer ${session.idpAccessToken}`;
+
+// ❌ Storing tokens in localStorage — readable by any JS, XSS-vulnerable
+localStorage.setItem("access_token", token);
+
+// ❌ Skipping JWT validation in FastAPI because "the network is private"
+//    Zero Trust means every service validates — even inside a VPC
+@app.get("/items")
+def list_items(user_id: str = Header(...)):   # trusts a plain header
+    ...
 ```
-
-Cookies with `SameSite: Strict` are inaccessible to cross-site scripts. Middleware handles redirect — pages don't need individual auth checks.
 
 ---
 
 ## Quick Checklist
 
-- [ ] Tokens stored in cookies with `SameSite: "Strict"` — never `localStorage` or `sessionStorage`
-- [ ] `isTokenExpired()` is called in middleware before every non-public request
-- [ ] `middleware.ts` handles both "no token" and "expired token" cases identically
-- [ ] `UserContext` is populated from the cookie on mount — not from an API call
-- [ ] `logout()` removes the cookie and hard-redirects to clear all React state
-- [ ] `authApi()` globally handles 401 with a redirect — components never check for 401 individually
-- [ ] Login form stores token on success and reads `?from=` to redirect back
+- [ ] **Two App Registrations**: one for the Next.js BFF (Client), one for the FastAPI API (Resource)
+- [ ] **API permission**: BFF app has delegated `access_as_user` permission on the API app, admin-consented
+- [ ] **Auth.js configured**: OIDC provider set up, `idpAccessToken` persisted in the JWT callback
+- [ ] **OBO implemented**: `getApiToken()` exchanges the IdP token for an API-scoped token before every FastAPI call
+- [ ] **Token cache**: OBO results cached (in-memory or Redis) — not re-fetched on every request
+- [ ] **Middleware guards all routes**: unauthenticated requests redirect to the IdP sign-in page
+- [ ] **FastAPI validates JWTs**: signature verified against JWKS, `aud` and `iss` claims checked
+- [ ] **No raw tokens on the client**: browser only receives the encrypted session cookie and opaque user fields from `/api/me`
+- [ ] **No shared secret headers**: FastAPI rejects any request without a valid signed Bearer token
