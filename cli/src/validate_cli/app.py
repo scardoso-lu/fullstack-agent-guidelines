@@ -59,7 +59,13 @@ def cmd_imports(
 ) -> None:
     """Validate Clean Architecture import directions.
 
-    [dim]Pipe the output of:[/dim]
+    [bold]Rules (required):[/bold]
+      domain       → must not import application, infrastructure, or presentation
+      application  → must not import infrastructure or presentation
+                     (exception: infrastructure.repositories.contract is allowed)
+      infrastructure → must not import presentation
+
+    [bold]Input:[/bold]
       grep -rn "^from\\\\|^import" src/ --include="*.py" | validate-tools imports
     """
     from validate_cli._validators.imports import validate_import_directions
@@ -80,7 +86,15 @@ def cmd_commits(
 ) -> None:
     """Validate Conventional Commits format and subject length.
 
-    [dim]Pipe the output of:[/dim]
+    [bold]Rules:[/bold]
+      required    subject must match type(scope)?: description
+      recommended subject must be ≤72 characters
+
+    [bold]Allowed types:[/bold] feat fix docs chore refactor test ci perf build style revert
+
+    Merge and Revert auto-commits are skipped.
+
+    [bold]Input:[/bold]
       git log --format="%H %s" origin/main..HEAD | validate-tools commits
     """
     from validate_cli._validators.commits import validate_commit_messages
@@ -101,9 +115,11 @@ def cmd_migration(
 ) -> None:
     """Check Alembic migration files for dangerous operations.
 
-    [dim]Examples:[/dim]
-      validate-tools migration alembic/versions/001_add_users.py
-      validate-tools migration alembic/versions/*.py
+    [bold]Rules:[/bold]
+      required    op.drop_column, op.drop_table, op.rename_table, op.rename_column
+      required    op.add_column with nullable=False and no server_default
+      recommended op.alter_column  (type changes risk backward incompatibility)
+      recommended op.execute       (raw SQL bypasses Alembic schema tracking)
     """
     from validate_cli._validators.migration import validate_migration
     if not files:
@@ -127,7 +143,11 @@ def cmd_env(
 ) -> None:
     """Check that every Settings field is documented in .env.example.
 
-    [dim]Example:[/dim]
+    [bold]Rules:[/bold]
+      required    every UPPER_SNAKE_CASE field in class *Settings* must have
+                  a matching KEY= entry in .env.example
+
+    [bold]Example:[/bold]
       validate-tools env --settings src/config/settings.py --example .env.example
     """
     from validate_cli._validators.env import validate_env_completeness
@@ -146,7 +166,14 @@ def cmd_tests(
     files: Annotated[List[Path], typer.Argument(help="pytest test file(s)")],
     strict: _STRICT = False,
 ) -> None:
-    """Check test function names for duplicates and descriptiveness."""
+    """Check test function names for duplicates and descriptiveness.
+
+    [bold]Rules:[/bold]
+      required    duplicate def test_*() names in the same file
+                  (pytest silently skips the second definition)
+      recommended names with fewer than 3 tokens after the test_ prefix
+                  (e.g. test_user is flagged; test_user_login_returns_200 is fine)
+    """
     from validate_cli._validators.tests import validate_test_names
     _run_per_file(files, validate_test_names, strict)
 
@@ -159,7 +186,14 @@ def cmd_logs(
     files: Annotated[List[Path], typer.Argument(help="Python source file(s) to check")],
     strict: _STRICT = False,
 ) -> None:
-    """Detect print() calls and f-strings inside logger calls."""
+    """Detect logging anti-patterns in Python source files.
+
+    [bold]Rules:[/bold]
+      required    print() calls — must use the project logger instead
+      recommended f-strings passed to logger.*() — prefer lazy % formatting
+                  to avoid eager interpolation when the log level is disabled
+                  (e.g. logger.info("val %s", x) instead of logger.info(f"val {x}"))
+    """
     from validate_cli._validators.logs import validate_log_calls
     _run_per_file(files, validate_log_calls, strict)
 
@@ -172,9 +206,16 @@ def cmd_coverage(
     file: Annotated[Optional[Path], typer.Argument(help="Cobertura XML file (default: coverage.xml)")] = None,
     strict: _STRICT = False,
 ) -> None:
-    """Validate per-layer code coverage against thresholds.
+    """Validate per-layer code coverage against minimum thresholds.
 
-    [dim]Generate coverage.xml with: pytest --cov=src --cov-report=xml[/dim]
+    [bold]Thresholds (required):[/bold]
+      domain         ≥ 90%
+      application    ≥ 85%
+      infrastructure ≥ 65%
+      presentation   ≥ 55%
+
+    [bold]Generate coverage.xml:[/bold]
+      pytest --cov=src --cov-report=xml
     """
     from validate_cli._validators.coverage import validate_coverage_distribution
     path = file or Path("coverage.xml")
@@ -196,7 +237,17 @@ def cmd_supply_chain(
     file: Annotated[Optional[Path], typer.Argument(help="pyproject.toml or package.json (default: pyproject.toml)")] = None,
     strict: _STRICT = False,
 ) -> None:
-    """Scan package manifests for supply-chain risks."""
+    """Scan package manifests for supply-chain risks.
+
+    [bold]Rules:[/bold]
+      required    VCS sources      git = / hg = / svn = (TOML) or git+https:// (JSON)
+      required    direct URL       url = "https://..."
+      required    local path       path = "../..." or "file:..."
+      required    wildcard version * / latest / any
+      recommended pre-release      1.0.0b2 / 1.0.0.dev1 / 1.0.0-beta.1
+
+    Accepts pyproject.toml (Python) or package.json (Node).
+    """
     from validate_cli._validators.supply_chain import validate_supply_chain
     path = file or Path("pyproject.toml")
     if not path.exists():
@@ -217,7 +268,19 @@ def cmd_sensitive_logging(
     files: Annotated[List[Path], typer.Argument(help="Python source file(s) to check")],
     strict: _STRICT = False,
 ) -> None:
-    """Detect sensitive data (passwords, tokens, keys) in log/print calls."""
+    """Detect sensitive data leaked through log or print calls.
+
+    [bold]Sensitive fields:[/bold]
+      password, passwd, token, secret, api_key, apikey, access_token,
+      refresh_token, auth_token, credit_card, card_number, cvv, cvc,
+      ssn, private_key, authorization
+
+    [bold]Rules:[/bold]
+      required    sensitive field interpolated in a log/print call
+                  (f-string, %-format, or positional argument)
+      recommended logger.*(str(e)) / repr(e) — raw exception dumps can
+                  expose DB connection strings or credentials
+    """
     from validate_cli._validators.sensitive_logging import validate_sensitive_logging
     _run_per_file(files, validate_sensitive_logging, strict)
 
@@ -230,7 +293,21 @@ def cmd_secrets(
     files: Annotated[List[Path], typer.Argument(help="Source file(s) to scan (Python or TypeScript)")],
     strict: _STRICT = False,
 ) -> None:
-    """Detect hardcoded API keys, JWTs, and secret variables."""
+    """Detect hardcoded API keys, JWTs, and secret variable assignments.
+
+    [bold]Rules (required):[/bold]
+      Provider keys   Stripe sk_live_* / sk_test_* / pk_* / whsec_*
+                      Slack xoxb-* / xoxp-*
+                      GitHub ghp_* / ghs_* / github_pat_*
+                      Google AIza*
+                      AWS AKIA*
+      JWT tokens      eyJ...eyJ... literals (non-test files only)
+      Secret vars     password / secret / api_key / private_key / client_secret
+                      assigned a non-placeholder string (non-test files only)
+
+    Test files (test_*.py, *.spec.ts) are exempt from JWT and secret-variable
+    checks but provider keys are always flagged.
+    """
     from validate_cli._validators.hardcoded_secrets import validate_hardcoded_secrets
     _run_per_file(files, validate_hardcoded_secrets, strict)
 
