@@ -55,17 +55,29 @@ def output_report(
     strict: bool,
     force_human: bool = False,
     pretty: bool = False,
-) -> None:
+    exit_on_done: bool = True,
+) -> int:
+    """Print the report and return the appropriate exit code.
+
+    When exit_on_done is True (default) this calls sys.exit() directly.
+    Pass exit_on_done=False for multi-file loops that need to scan all
+    files before exiting.
+    """
     if _machine_mode(force_human):
         indent = 2 if pretty else None
         print(json.dumps(report_to_dict(report), indent=indent))
     else:
         _print_rich(report)
 
+    code = 0
     if report.status == "violations":
-        sys.exit(2)
-    if strict and report.status == "warnings":
-        sys.exit(1)
+        code = 2
+    elif strict and report.status == "warnings":
+        code = 1
+
+    if exit_on_done and code:
+        sys.exit(code)
+    return code
 
 
 def _print_rich(report: AnalysisReportDto) -> None:

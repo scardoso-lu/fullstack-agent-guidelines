@@ -129,7 +129,20 @@ def cmd_migration(
             print_error(str(exc), "validate_migration", state.human)
             raise typer.Exit(1)
         return
-    _run_per_file(files, validate_migration, strict)
+
+    # validate_migration takes (source) only — no filename arg
+    worst_exit = 0
+    for path in files:
+        try:
+            report = validate_migration(path.read_text())
+        except ValueError as exc:
+            print_error(str(exc), force_human=state.human)
+            worst_exit = max(worst_exit, 1)
+            continue
+        code = output_report(report, strict=strict, force_human=state.human, pretty=state.pretty, exit_on_done=False)
+        worst_exit = max(worst_exit, code)
+    if worst_exit:
+        sys.exit(worst_exit)
 
 
 # ── env ───────────────────────────────────────────────────────────────────────
@@ -443,12 +456,8 @@ def _run_per_file(files: list[Path], validator, strict: bool) -> None:
             worst_exit = max(worst_exit, 1)
             continue
 
-        output_report(report, strict=False, force_human=state.human, pretty=state.pretty)
-
-        if report.status == "violations":
-            worst_exit = max(worst_exit, 2)
-        elif strict and report.status == "warnings":
-            worst_exit = max(worst_exit, 1)
+        code = output_report(report, strict=strict, force_human=state.human, pretty=state.pretty, exit_on_done=False)
+        worst_exit = max(worst_exit, code)
 
     if worst_exit:
         sys.exit(worst_exit)
