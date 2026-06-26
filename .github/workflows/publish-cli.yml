@@ -1,0 +1,109 @@
+name: Publish CLI to PyPI
+
+on:
+  push:
+    tags:
+      - "cli-v*"   # release with: git tag cli-v0.1.0 && git push --tags
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── 1. test ──────────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Install CLI
+        working-directory: cli
+        run: uv venv && uv pip install -e .
+
+      - name: Smoke — help renders without error
+        run: cli/.venv/bin/validate-tools --help
+
+      - name: Smoke — clean input exits 0
+        run: echo "abc1234 feat(auth): add JWT login" | cli/.venv/bin/validate-tools commits
+
+      - name: Smoke — violations exit 2
+        run: |
+          echo "abc1234 bad commit message" | cli/.venv/bin/validate-tools commits
+          [ $? -eq 2 ]
+
+      - name: Smoke — JSON output is valid when piped
+        run: |
+          echo "abc1234 feat(auth): add login" \
+            | cli/.venv/bin/validate-tools commits \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='clean'"
+
+      - name: Smoke — batch run command
+        run: |
+          echo '{"commits":"abc1234 feat: ok","supply_chain":"[project]\nname=\"foo\""}' \
+            | cli/.venv/bin/validate-tools run \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); assert len(d)==2"
+
+  # ── 2. build ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Build wheel and sdist
+        working-directory: cli
+        run: uv build
+
+      - name: Validate distribution metadata
+        run: uvx twine check cli/dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: cli/dist/
+
+  # ── 3. publish → TestPyPI ────────────────────────────────────────────────────
+  publish-testpypi:
+    name: Publish → TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true   # re-running the same tag won't fail
+
+  # ── 4. publish → PyPI ────────────────────────────────────────────────────────
+  publish-pypi:
+    name: Publish → PyPI
+    needs: [build, publish-testpypi]
+    runs-on: ubuntu-latest
+    environment: pypi          # configure manual approval gate in GitHub Settings
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
