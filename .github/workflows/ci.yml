@@ -62,3 +62,41 @@ jobs:
             coverage.xml
             htmlcov/
           retention-days: 7
+
+  test-cli:
+    name: Test CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install CLI
+        working-directory: cli
+        run: uv venv && uv pip install -e .
+
+      - name: Smoke — help renders without error
+        run: cli/.venv/bin/validate-tools --help
+
+      - name: Smoke — clean input exits 0
+        run: echo "abc1234 feat(auth): add JWT login" | cli/.venv/bin/validate-tools commits
+
+      - name: Smoke — violations exit 2
+        run: |
+          echo "abc1234 bad commit message" | cli/.venv/bin/validate-tools commits
+          [ $? -eq 2 ]
+
+      - name: Smoke — JSON output is valid when piped
+        run: |
+          echo "abc1234 feat(auth): add login" \
+            | cli/.venv/bin/validate-tools commits \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='clean'"
+
+      - name: Smoke — batch run command
+        run: |
+          echo '{"commits":"abc1234 feat: ok","supply_chain":"[project]\nname=\"foo\""}' \
+            | cli/.venv/bin/validate-tools run \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); assert len(d)==2"
