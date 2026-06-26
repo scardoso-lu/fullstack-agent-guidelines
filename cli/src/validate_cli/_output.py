@@ -11,39 +11,22 @@ from rich.text import Text
 from validate_cli._models import AnalysisReportDto
 
 _console = Console()
-_err = Console(stderr=True)
-
-_STATUS_COLOR = {
-    "clean": "green",
-    "warnings": "yellow",
-    "violations": "red",
-}
+_STATUS_COLOR = {"clean": "green", "warnings": "yellow", "violations": "red"}
 
 
-def print_error(message: str) -> None:
-    _err.print(f"[red]Error:[/red] {message}")
+def _machine_mode(force_human: bool) -> bool:
+    """True when output should be JSON: not a TTY and not explicitly overridden."""
+    return not force_human and not sys.stdout.isatty()
 
 
-def output_report(report: AnalysisReportDto, as_json: bool, strict: bool) -> None:
-    if as_json:
-        _print_json(report)
-    else:
-        _print_rich(report)
-
-    if report.status == "violations":
-        sys.exit(2)
-    if strict and report.status == "warnings":
-        sys.exit(1)
-
-
-def _print_json(report: AnalysisReportDto) -> None:
-    data = {
+def report_to_dict(report: AnalysisReportDto) -> dict:
+    return {
         "analysis": report.analysis,
-        "total_items": report.total_items,
         "status": report.status,
-        "summary": report.summary,
+        "total_items": report.total_items,
         "required_count": report.required_count,
         "recommended_count": report.recommended_count,
+        "summary": report.summary,
         "findings": [
             {
                 "rule_id": f.rule_id,
@@ -55,7 +38,34 @@ def _print_json(report: AnalysisReportDto) -> None:
             for f in report.findings
         ],
     }
-    print(json.dumps(data, indent=2))
+
+
+def print_error(message: str, analysis: str = "", force_human: bool = False) -> None:
+    if _machine_mode(force_human):
+        payload: dict = {"status": "error", "error": message}
+        if analysis:
+            payload["analysis"] = analysis
+        print(json.dumps(payload))
+    else:
+        Console(stderr=True).print(f"[red]Error:[/red] {message}")
+
+
+def output_report(
+    report: AnalysisReportDto,
+    strict: bool,
+    force_human: bool = False,
+    pretty: bool = False,
+) -> None:
+    if _machine_mode(force_human):
+        indent = 2 if pretty else None
+        print(json.dumps(report_to_dict(report), indent=indent))
+    else:
+        _print_rich(report)
+
+    if report.status == "violations":
+        sys.exit(2)
+    if strict and report.status == "warnings":
+        sys.exit(1)
 
 
 def _print_rich(report: AnalysisReportDto) -> None:
