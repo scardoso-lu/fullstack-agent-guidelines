@@ -84,8 +84,8 @@ jobs:
 
       - name: Smoke — violations exit 2
         run: |
-          echo "abc1234 bad commit message" | cli/.venv/bin/validate-tools commits
-          [ $? -eq 2 ]
+          echo "abc1234 bad commit message" | cli/.venv/bin/validate-tools commits || EXIT=$?
+          [ "${EXIT:-0}" -eq 2 ]
 
       - name: Smoke — JSON output is valid when piped
         run: |
