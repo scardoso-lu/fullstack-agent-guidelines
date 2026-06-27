@@ -70,29 +70,10 @@ jobs:
           name: dist
           path: cli/dist/
 
-  # ── 3. publish → TestPyPI ────────────────────────────────────────────────────
-  publish-testpypi:
-    name: Publish → TestPyPI
-    needs: build
-    runs-on: ubuntu-latest
-    environment: testpypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true   # re-running the same tag won't fail
-
-  # ── 4. publish → PyPI ────────────────────────────────────────────────────────
+  # ── 3. publish → PyPI ────────────────────────────────────────────────────────
   publish-pypi:
     name: Publish → PyPI
-    needs: [build, publish-testpypi]
+    needs: build
     runs-on: ubuntu-latest
     environment: pypi          # configure manual approval gate in GitHub Settings
     permissions:
