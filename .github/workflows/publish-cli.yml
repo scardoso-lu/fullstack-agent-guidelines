@@ -73,25 +73,15 @@ jobs:
 
           VERSION="${VERSION#cli-v}"
           VERSION="${VERSION#v}"
-          export VERSION
 
-          python - <<'PY'
-          import os
-          import re
-          from pathlib import Path
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9.-]+)?$ ]]; then
+            echo "::error::Release tag must resolve to a PEP 440-ish version, got '$VERSION'"
+            exit 1
+          fi
 
-          version = os.environ["VERSION"]
-          if not re.fullmatch(r"\d+\.\d+\.\d+(?:[a-zA-Z0-9.-]+)?", version):
-              raise SystemExit(f"Release tag must resolve to a PEP 440-ish version, got {version!r}")
-
-          path = Path("cli/pyproject.toml")
-          text = path.read_text(encoding="utf-8")
-          updated = re.sub(r'^version = "[^"]+"$', f'version = "{version}"', text, count=1, flags=re.MULTILINE)
-          if updated == text:
-              raise SystemExit("Could not find project version in cli/pyproject.toml")
-          path.write_text(updated, encoding="utf-8")
-          print(f"Building validate-tools {version}")
-          PY
+          sed -i -E "s/^version = \"[^\"]+\"$/version = \"$VERSION\"/" cli/pyproject.toml
+          grep -q "^version = \"$VERSION\"$" cli/pyproject.toml
+          echo "Building validate-tools $VERSION"
 
       - name: Build wheel and sdist
         working-directory: cli
