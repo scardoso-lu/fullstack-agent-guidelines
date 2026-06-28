@@ -170,7 +170,8 @@ daisyUI is a Tailwind CSS plugin — there are no React component imports. Apply
 ### Installation
 
 ```bash
-npm install daisyui
+cd frontend
+pnpm add daisyui@4.12.24
 ```
 
 ```ts

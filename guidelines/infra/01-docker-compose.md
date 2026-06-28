@@ -15,21 +15,23 @@ Use when running both stacks together locally or in production, setting up per-s
 my-project/
 ├── backend/
 │   ├── Dockerfile
+│   ├── Dockerfile.test
 │   ├── pyproject.toml
 │   ├── uv.lock
+│   ├── .env                 ← gitignored — backend secrets
+│   ├── .env.example         ← committed — backend template
 │   └── src/
 ├── frontend/
 │   ├── Dockerfile
 │   ├── package.json
-│   ├── package-lock.json
+│   ├── pnpm-lock.yaml
+│   ├── pnpm-workspace.yaml
 │   ├── .npmrc
+│   ├── .env                 ← gitignored — frontend secrets
+│   ├── .env.example         ← committed — frontend template
 │   └── src/
 ├── docker-compose.yml
 ├── docker-compose.dev.yml
-├── .env.backend           ← gitignored — real secrets
-├── .env.backend.example   ← committed — template with placeholder values
-├── .env.frontend          ← gitignored — real secrets
-├── .env.frontend.example  ← committed — template with placeholder values
 └── .gitignore
 ```
 
@@ -45,7 +47,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - .env.backend
+      - ./backend/.env
     ports:
       - "8000:8000"
     healthcheck:
@@ -63,7 +65,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     env_file:
-      - .env.frontend
+      - ./frontend/.env
     ports:
       - "3000:3000"
     depends_on:
@@ -84,10 +86,15 @@ networks:
 
 Extends the base compose with live-reloading mounts. Run both files together — the override replaces only what it declares:
 
+If backend development needs dev dependencies, the override uses `backend/Dockerfile.test`. The base production compose keeps `backend/Dockerfile` and never targets a test stage inside it.
+
 **`docker-compose.dev.yml`**
 ```yaml
 services:
   backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
     volumes:
       - ./backend/src:/app/src:ro
     command: ["uv", "run", "uvicorn", "src.main:app", "--reload", "--host", "0.0.0.0"]
@@ -111,17 +118,19 @@ docker compose up
 
 ## env_file Convention
 
-Each service loads only its own secrets — no shared root `.env`:
+Each service loads only its own secrets from its stack directory — no shared root `.env` and no root `.env.backend` / `.env.frontend` aliases:
 
-**`.env.backend — gitignored`**
+**`backend/.env — gitignored`**
 ```bash
 ENVIRONMENT=DEV
 API_HOST=0.0.0.0
 API_PORT=8000
 DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/mydb
 JWT_SECRET=<generate: python -c "import secrets; print(secrets.token_hex(32))">
+```
 
-# .env.frontend — gitignored
+**`frontend/.env — gitignored`**
+```bash
 NEXT_PUBLIC_API_URL=http://backend:8000
 NEXTAUTH_SECRET=<generate: openssl rand -hex 32>
 NODE_ENV=production
@@ -129,12 +138,13 @@ NODE_ENV=production
 
 ```bash
 # .gitignore
-.env.backend
-.env.frontend
-.env.*.local
+backend/.env
+frontend/.env
+backend/.env.*.local
+frontend/.env.*.local
 ```
 
-Keep `.env.*.example` files current whenever a new variable is added. They are the contract between the repo and the environment.
+Keep `backend/.env.example` and `frontend/.env.example` current whenever a new variable is added. They are the contract between the repo and the environment.
 
 ---
 
@@ -142,11 +152,11 @@ Keep `.env.*.example` files current whenever a new variable is added. They are t
 
 Inside the Docker network, services communicate by service name. The frontend container reaches the backend via `http://backend:8000`, not `http://localhost:8000`:
 
-**`.env.frontend (inside Docker)`**
+**`frontend/.env (inside Docker)`**
 ```bash
 NEXT_PUBLIC_API_URL=http://backend:8000
 
-# .env.frontend (local dev without Docker)
+# frontend/.env (local dev without Docker)
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
@@ -209,10 +219,10 @@ env_file:
 # ✅ CORRECT — each service gets only its own file
 # backend service:
 env_file:
-  - .env.backend
+  - ./backend/.env
 # frontend service:
 env_file:
-  - .env.frontend
+  - ./frontend/.env
 
 # ❌ WRONG — frontend starts before backend is ready
 depends_on:
@@ -224,7 +234,7 @@ depends_on:
     condition: service_healthy
 
 # ❌ WRONG — .env files committed to git
-# (no .gitignore entry for .env.backend / .env.frontend)
+# (no .gitignore entry for backend/.env / frontend/.env)
 
 # ❌ WRONG — .env.*.example files NOT committed
 # (new developer has no idea what variables are needed)
@@ -234,9 +244,9 @@ depends_on:
 
 ## Quick Checklist
 
-- [ ] Each service uses its own `env_file` (`env.backend`, `.env.frontend`) — no shared root `.env`
-- [ ] `.env.backend` and `.env.frontend` in `.gitignore`
-- [ ] `.env.backend.example` and `.env.frontend.example` committed with placeholder values
+- [ ] Each service uses its own stack-local `env_file` (`./backend/.env`, `./frontend/.env`) — no shared root `.env`
+- [ ] `backend/.env` and `frontend/.env` in `.gitignore`
+- [ ] `backend/.env.example` and `frontend/.env.example` committed with placeholder values
 - [ ] Backend exposes `/health` returning HTTP 200 for the healthcheck to probe
 - [ ] Frontend `depends_on` backend with `condition: service_healthy`
 - [ ] Services on a named `app-net` network — frontend uses `http://backend:<port>`, not `localhost`

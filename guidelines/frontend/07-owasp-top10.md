@@ -86,7 +86,7 @@ For the full RBAC pattern — permission-based visibility, `<PermissionGate>`, a
 const nextConfig = {
   // No security headers at all
   // CORS wide open via API routes
-  // .env.local committed to git
+  // frontend/.env.local committed to git
 };
 ```
 
@@ -128,7 +128,7 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-**`.env.local — never commit this file`**
+**`frontend/.env.local - never commit this file`**
 ```bash
 NEXT_PUBLIC_API_URL=https://api.yourapp.com   # safe: intentionally client-visible
 JWT_SECRET=...                                 # NEVER add NEXT_PUBLIC_ prefix to secrets
@@ -144,9 +144,9 @@ DATABASE_URL=...                               # server-only
 See the dedicated `08-supply-chain.md` guideline for full detail. Summary:
 
 - Pin exact versions in `package.json` — `"react": "19.0.0"`, not `"^19.0.0"`
-- Commit `package-lock.json` or `pnpm-lock.yaml` — never delete or `.gitignore` it
-- Run `npm audit` / `pnpm audit` in CI — break the build on high-severity findings
-- Review `npm install <pkg>` before running it — check weekly downloads and last publish date
+- Commit `frontend/pnpm-lock.yaml` beside `frontend/package.json`; never delete or `.gitignore` it
+- Run `cd frontend && pnpm audit --audit-level high` in CI
+- Review `pnpm view <pkg>` metadata before installing; check publish age, maintainers, and source
 
 ---
 
@@ -362,4 +362,4 @@ Every route segment should have an `error.tsx` boundary. The root `app/error.tsx
 - [ ] Logout uses Auth.js `signOut()` — server-side session invalidation, not just a client-side cookie clear
 - [ ] Error boundaries on every route segment — stack traces never shown to users
 - [ ] Auth failures logged to monitoring (never logging passwords or tokens)
-- [ ] Lockfile committed — `npm audit` runs in CI
+- [ ] `frontend/pnpm-lock.yaml` committed and `cd frontend && pnpm audit --audit-level high` runs in CI

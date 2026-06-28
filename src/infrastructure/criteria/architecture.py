@@ -50,8 +50,8 @@ CRITERIA: list[ComplianceCriterion] = [
         severity="recommended",
         check_type="code_pattern",
         verification_hint=(
-            "Paste the relevant lines from pyproject.toml [tool.poetry.dependencies] (backend) "
-            "or package.json (frontend) for the new packages"
+            "Paste the relevant lines from backend/pyproject.toml or frontend/package.json "
+            "for the new packages"
         ),
         forbidden_pattern=r'(?:"[\w\-]+"|\b[\w][\w\-]*)\s*[=:]\s*"[\^~][\d]',
     ),
@@ -75,7 +75,7 @@ CRITERIA: list[ComplianceCriterion] = [
         severity="required",
         check_type="command",
         verification_hint=(
-            "Run `uv run pip-audit` (backend) or `pnpm audit --audit-level=high` (frontend) "
+            "Run `uv run pip-audit` (backend) or `cd frontend && pnpm audit --audit-level high` "
             "and paste the full output"
         ),
         check_command="uv run pip-audit",
@@ -86,12 +86,12 @@ CRITERIA: list[ComplianceCriterion] = [
         id="architecture/dependency/lockfile-committed",
         guideline_slug="architecture/01-technology-selection",
         stack="architecture",
-        text="Lockfile (uv.lock or pnpm-lock.yaml) is committed alongside the new dependency",
+        text="Lockfile is committed beside its manifest (`backend/uv.lock` or `frontend/pnpm-lock.yaml`)",
         category="dependency-governance",
         severity="required",
         check_type="manual",
         verification_hint=(
-            "Confirm that uv.lock (backend) or pnpm-lock.yaml (frontend) is updated and included "
+            "Confirm that backend/uv.lock or frontend/pnpm-lock.yaml is updated and included "
             "in this PR's diff. Provide the git diff --stat line showing the lockfile change."
         ),
     ),
@@ -108,8 +108,8 @@ CRITERIA: list[ComplianceCriterion] = [
         severity="required",
         check_type="code_pattern",
         verification_hint=(
-            "Paste the [tool.poetry.dependencies] section of pyproject.toml "
-            "or the dependencies block of package.json for all new packages"
+            "Paste the dependency section of backend/pyproject.toml or frontend/package.json "
+            "for all new packages"
         ),
         forbidden_pattern=(
             r'\b(?:git|hg|svn)\s*=\s*["\']'           # TOML VCS
@@ -129,7 +129,7 @@ CRITERIA: list[ComplianceCriterion] = [
         severity="required",
         check_type="code_pattern",
         verification_hint=(
-            "Paste the dependency declarations for new packages from pyproject.toml or package.json"
+            "Paste the dependency declarations for new packages from backend/pyproject.toml or frontend/package.json"
         ),
         forbidden_pattern=r'[=:]\s*["\'](?:\*|latest|any)["\']',
     ),
@@ -142,7 +142,7 @@ CRITERIA: list[ComplianceCriterion] = [
         severity="recommended",
         check_type="code_pattern",
         verification_hint=(
-            "Paste the dependency declarations for new packages from pyproject.toml or package.json"
+            "Paste the dependency declarations for new packages from backend/pyproject.toml or frontend/package.json"
         ),
         forbidden_pattern=(
             r'"[\d.]+(?:a\d+|b\d+|rc\d+|\.dev\d*)"'   # PEP 440: 1.0.0b2
@@ -158,7 +158,7 @@ CRITERIA: list[ComplianceCriterion] = [
         severity="required",
         check_type="code_pattern",
         verification_hint=(
-            "Paste 5–10 representative package entries from uv.lock or pnpm-lock.yaml "
+            "Paste 5-10 representative package entries from backend/uv.lock or frontend/pnpm-lock.yaml "
             "to confirm hash/integrity fields are present"
         ),
         required_pattern=r'hash\s*=\s*"sha|"integrity"\s*:\s*"sha',

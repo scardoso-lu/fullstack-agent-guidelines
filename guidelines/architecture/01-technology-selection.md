@@ -50,7 +50,7 @@ Real alternatives are:
 - **No-license** packages are not adoptable (no permission to use).
 - **Commercial / EULA** packages need procurement + legal sign-off + a budget owner.
 
-Check `package.json` / `pyproject.toml` of the candidate and its transitive deps (`pnpm licenses list`, `pip-licenses`).
+Check the stack-local manifest (`frontend/package.json` or `backend/pyproject.toml`) of the candidate and its transitive deps (`cd frontend && pnpm licenses list`, `cd backend && pip-licenses`).
 
 ### 4. Maintenance posture
 
@@ -85,7 +85,7 @@ Anything with an open Critical/High CVE on the version under consideration is bl
 ### 7. Pin and lock
 
 - Pin the version explicitly (`^1.2.3` is not a pin; `1.2.3` is).
-- Commit the lockfile (`uv.lock`, `pnpm-lock.yaml`).
+- Commit the lockfile beside its manifest (`backend/uv.lock`, `frontend/pnpm-lock.yaml`).
 - Add the new dependency in the smallest reasonable PR — ideally **its own slice**, separate from the feature that consumes it.
 
 ## Peripheral technology decisions

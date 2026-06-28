@@ -101,7 +101,7 @@ typecheck-backend:
 	cd backend && uv run mypy --strict src
 
 test-backend:
-	cd backend && uv run pytest --cov=src --cov-report=term-missing --cov-fail-under=85
+	docker compose -f docker-compose.test.yml run --rm backend-test
 
 lint-frontend:
 	cd frontend && pnpm lint
@@ -113,7 +113,7 @@ typecheck-frontend:
 	cd frontend && pnpm typecheck
 
 test-frontend:
-	cd frontend && pnpm test --coverage
+	docker compose -f docker-compose.test.yml run --rm frontend-test
 
 e2e-frontend:
 	cd frontend && pnpm exec playwright test

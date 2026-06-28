@@ -3,209 +3,161 @@ model: opus
 effort: high
 ---
 
-# Supply Chain Security — Next.js and npm
+# Supply Chain Security - Next.js and pnpm
 
-Use when adding a new npm package, setting up CI, or configuring Docker. Covers exact version pinning, save-exact=true, npm audit in CI, SHA-pinned GitHub Actions, Dependabot config, and SRI for CDN assets.
+Use when adding a frontend package, setting up CI, configuring Docker, or reviewing dependency changes. Covers exact version pinning, frontend-local pnpm lockfiles, `.npmrc`, pnpm audit, SHA-pinned GitHub Actions, Dependabot/Renovate, and SRI for CDN assets.
 
-Every package you install is a piece of someone else's code running with full access to your application and your users' browsers. Supply chain attacks compromise trusted packages to inject malicious code — the xz utils backdoor, event-stream, and hundreds of typosquatted npm packages follow this pattern.
-
-This is OWASP A03:2025 applied to the JavaScript ecosystem.
+Every package you install is someone else's code running in your build and, often, your users' browsers. Supply-chain attacks compromise trusted packages, publish typosquats, or abuse install scripts. The defense is strict: exact versions, frozen lockfiles, disabled lifecycle scripts, package review, and reproducible CI.
 
 ---
 
-## Pin Exact Versions — No Semver Ranges in Production
+## Frontend Package Boundary
 
-Semver ranges (`^`, `~`, `>=`) mean "install whatever is latest" at the time of `npm install`. If a maintainer account is compromised and a malicious patch is published, your next `npm install` installs it.
+The standard project layout keeps frontend package state under `frontend/`:
 
-**Vulnerable:**
-```json
-{
-  "dependencies": {
-    "next": "^15.0.0",
-    "react": "^19.0.0",
-    "axios": ">=1.0.0"
-  }
-}
+```text
+frontend/
+  .npmrc
+  package.json
+  pnpm-lock.yaml
+  pnpm-workspace.yaml
 ```
 
-**Fixed — exact versions:**
+Do not generate `pnpm-lock.yaml` or `pnpm-workspace.yaml` at the repository root for a single frontend app. Docker builds use `context: ./frontend`, so the lockfile that `pnpm install --frozen-lockfile` reads must be `frontend/pnpm-lock.yaml` and must match `frontend/package.json`.
+
+Only real multi-package pnpm monorepos use root pnpm workspace files. In that case, Docker must also build from the repo root and copy workspace files deliberately.
+
+---
+
+## Pin Exact Versions
+
+Semver ranges (`^`, `~`, `>=`) mean "install whatever is latest within this range." If a maintainer account is compromised and a malicious patch is published, the next install can pick it up.
+
 ```json
 {
   "dependencies": {
-    "next": "15.3.3",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "react-hook-form": "7.56.4",
-    "@hookform/resolvers": "3.9.0",
-    "zod": "3.25.55",
-    "js-cookie": "3.0.5",
-    "dompurify": "3.2.6",
-    "nuqs": "2.4.3",
-    "jwt-decode": "4.0.0"
+    "next": "15.3.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-hook-form": "7.55.0",
+    "zod": "3.24.2"
   },
   "devDependencies": {
     "typescript": "5.8.3",
-    "eslint": "9.28.0",
-    "@types/react": "19.1.6"
+    "vitest": "3.2.4",
+    "@playwright/test": "1.52.0"
   }
 }
 ```
 
-Setting `save-exact` in `.npmrc` makes this the default for every `npm install <pkg>`:
+`frontend/.npmrc` enforces exact saves and blocks lifecycle scripts:
 
-**`.npmrc`**
 ```ini
+ignore-scripts=true
 save-exact=true
 engine-strict=true
 ```
 
 ---
 
-## Commit and Never Delete the Lockfile
-
-The lockfile (`package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`) contains SHA hashes of every direct and transitive dependency. It is your content-addressed snapshot of the entire dependency tree.
+## Frozen Installs
 
 ```bash
-# ✅ Install exactly what is in the lockfile — no version resolution
-npm ci              # npm
-pnpm install --frozen-lockfile  # pnpm
-
-# ❌ WRONG — may upgrade packages on install
-npm install
+cd frontend
+pnpm install --frozen-lockfile
 ```
 
 Rules:
-- **Always commit** the lockfile — it belongs in version control
-- **Never** add `package-lock.json` to `.gitignore`
-- Use `npm ci` (not `npm install`) in CI/CD and Docker builds
-- Treat a lockfile diff in a PR with the same scrutiny as a code change
+
+- Always commit `frontend/pnpm-lock.yaml`.
+- Commit `frontend/pnpm-workspace.yaml` when pnpm workspace tooling is used.
+- Never add `frontend/pnpm-lock.yaml` to `.gitignore`.
+- Treat a lockfile diff in a PR with the same scrutiny as a code diff.
+- Do not use `pnpm install --no-frozen-lockfile` in CI or Docker to work around a stale lockfile. Regenerate the lockfile under `frontend/` and commit it.
 
 ---
 
-## Audit in CI — Break the Build on Known CVEs
+## Audit in CI
 
-**`.github/workflows/ci.yml`**
 ```yaml
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5   # pinned to SHA
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.4"
       - uses: actions/setup-node@1a4442cacd436585916779262731d1f68fbc272a
         with:
           node-version: "22"
-          cache: "npm"
-      - run: npm ci
-      - run: npm audit --audit-level=high   # fail on high/critical CVEs
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && pnpm audit --audit-level high
 ```
 
-`--audit-level=high` fails the build on High and Critical findings, passes on Low and Moderate. Adjust to your risk tolerance.
-
-For pnpm:
-```yaml
-- run: pnpm audit --audit-level high
-```
+`--audit-level high` fails the build on High and Critical findings.
 
 ---
 
-## Dependabot — Automated Dependency Updates
+## Docker Install Pattern
 
-**`.github/dependabot.yml`**
-```yaml
-version: 2
-updates:
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    groups:
-      # Group minor/patch updates to reduce PR noise
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    ignore:
-      # Review major version bumps manually
-      - dependency-name: "next"
-        update-types: ["version-update:semver-major"]
+`frontend/Dockerfile` is built with `context: ./frontend`; the files copied below must live in `frontend/`.
+
+```dockerfile
+FROM node:22-alpine AS deps
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 ```
 
-Dependabot opens PRs with version bumps. CI runs `npm audit` on each. Merge only after all checks pass.
+Do not copy a root lockfile into a frontend-context Docker build. That produces stale-lockfile failures because the lockfile is not tied to the `package.json` inside the build context.
 
 ---
 
-## Vetting Packages Before Installing
+## Vet Packages Before Installing
 
-Before running `npm install <package>`:
+Before adding a package:
 
 ```bash
-# Check before installing
-npm show <package> version        # latest version
-npm show <package> time           # when last published (stale = risk)
-npm show <package> maintainers    # who controls it
+pnpm view <package> version
+pnpm view <package> time
+pnpm view <package> maintainers
 ```
 
 Red flags:
-- Published <1 week ago and trending (typosquatting)
-- Maintainer account recently changed
-- <1000 weekly downloads (unless it's internal)
-- Very small code footprint for the claimed functionality
-- `postinstall` scripts that download files at install time
 
-**Typosquatting awareness:**
-```
-reqeust   ≠ request
-expresss  ≠ express
-nxt       ≠ next
-lodahs    ≠ lodash
-```
+- Published less than a week ago and trending
+- Maintainer account recently changed
+- Very low weekly downloads unless it is internal or intentionally niche
+- Install scripts that download binaries or execute shell commands
+- VCS, direct URL, or `file:` dependency sources
 
 ---
 
-## Pinning CI Actions to SHA (Not Tags)
+## Pin CI Actions to SHA
 
-Tags like `actions/checkout@v4` are mutable — the `v4` tag can be moved to point to malicious code. SHA references are immutable.
+Tags like `actions/checkout@v4` are mutable. SHA references are immutable.
 
 ```yaml
-# ❌ WRONG — tag can be silently moved
+# WRONG - tag can move
 - uses: actions/checkout@v4
-- uses: actions/setup-node@v4
 
-# ✅ Pin to the exact commit SHA
-- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5      # v4.2.2
-- uses: actions/setup-node@1a4442cacd436585916779262731d1f68fbc272a    # v4.2.0
-```
-
-Find the SHA for any action at `github.com/<org>/<action>/releases`.
-
----
-
-## Docker — Pin Base Image to Digest
-
-```dockerfile
-# ❌ WRONG — "latest" or a tag can change
-FROM node:22-alpine
-
-# ✅ Pin to immutable content digest
-FROM node:22-alpine@sha256:f6b3e3c...
-
-# Multi-stage build using exact image
-FROM node:22-alpine@sha256:f6b3e3c... AS builder
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --only=production  # exact lockfile install
+# CORRECT - exact commit
+- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 ```
 
 ---
 
-## Subresource Integrity for External Scripts
+## Subresource Integrity
 
-If you load any script or stylesheet from a CDN, use SRI:
+If you load a script or stylesheet from a CDN, use SRI:
 
 ```html
-<!-- Generate the hash: cat library.js | openssl dgst -sha384 -binary | openssl base64 -A -->
 <script
   src="https://cdn.example.com/library.min.js"
   integrity="sha384-abc123xyz..."
@@ -213,35 +165,40 @@ If you load any script or stylesheet from a CDN, use SRI:
 ></script>
 ```
 
-If the CDN serves a modified file, the browser refuses to execute it.
-
 ---
 
 ## Anti-Patterns
 
 ```bash
-# ❌ Installing without reviewing
-npx create-something-app  # executes code immediately — read the source first
-npm install $(curl https://somesite.com/package-name)  # never do this
+# WRONG - executes unreviewed package code immediately
+npx create-something-app
 
-# ❌ Using --legacy-peer-deps to suppress errors
-npm install --legacy-peer-deps   # hides dependency conflicts — investigate instead
+# WRONG - hides a stale lockfile in CI/Docker
+pnpm install --no-frozen-lockfile
 
-# ❌ Running npm install in production
-# Dockerfile: RUN npm install   ← resolves versions at build time, not deterministic
-# Dockerfile: RUN npm ci        ← uses exact lockfile
+# WRONG - creates lock/workspace files at repo root for a single frontend app
+pnpm install
+# Do not commit root pnpm files for a single frontend app.
+
+# CORRECT - generate frontend package state inside frontend/
+cd frontend
+pnpm install
+cd ..
+git add frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc
 ```
 
 ---
 
 ## Quick Checklist
 
-- [ ] All `package.json` dependencies use exact versions — no `^` or `~`
-- [ ] `.npmrc` has `save-exact=true`
-- [ ] Lockfile committed to git, never in `.gitignore`
-- [ ] CI runs `npm ci` (not `npm install`) and `npm audit --audit-level=high`
-- [ ] Dependabot (or Renovate) configured for weekly updates
-- [ ] New packages checked for age, download count, and maintainers before install
-- [ ] GitHub Actions pinned to SHA, not floating tags
-- [ ] Docker base images pinned to digest, not tags
-- [ ] External scripts use Subresource Integrity (SRI) hashes
+- [ ] `frontend/package.json` dependencies are exact versions; no `^`, `~`, wildcard, or `latest`
+- [ ] `frontend/.npmrc` has `ignore-scripts=true`, `save-exact=true`, and `engine-strict=true`
+- [ ] `frontend/pnpm-lock.yaml` is committed and matches `frontend/package.json`
+- [ ] `frontend/pnpm-workspace.yaml` is committed when workspace tooling is used
+- [ ] No frontend pnpm lock/workspace files exist at repo root unless the project is a real root pnpm monorepo
+- [ ] CI runs `cd frontend && pnpm install --frozen-lockfile`
+- [ ] CI runs `cd frontend && pnpm audit --audit-level high`
+- [ ] Docker copies frontend-local `.npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml` before install
+- [ ] New packages were checked for age, maintainers, source, and install scripts
+- [ ] GitHub Actions are pinned to SHA, not floating tags
+- [ ] External scripts use Subresource Integrity hashes

@@ -5,14 +5,14 @@ effort: high
 
 # Configuration Layers — Startup Env, Runtime DB, and Settings UI
 
-Use when deciding where a configuration value lives — secrets, service URLs, user preferences, feature flags, or operational limits. Defines the three-layer rule: startup config belongs in .env / environment variables, runtime config that users can change belongs in the database, and every runtime config surface needs a frontend settings page. Hardcoded values anywhere in the codebase are always wrong.
+Use when deciding where a configuration value lives — secrets, service URLs, user preferences, feature flags, or operational limits. Defines the three-layer rule: backend startup config belongs in `backend/.env` / environment variables, runtime config that users can change belongs in the database, and every runtime config surface needs a frontend settings page. Hardcoded values anywhere in the codebase are always wrong.
 
 Every value in the system belongs to exactly one configuration layer. Choosing the wrong layer causes operational pain (ops must redeploy to change a user preference) or security problems (secrets in the DB, user data in the source tree).
 
 ## The Three-Layer Rule
 
 ```
-Layer 1 — Startup (env vars / .env)
+Layer 1 — Startup (env vars / backend/.env)
   ↳ Set at container launch. Ops controls. Changing requires a redeploy.
   ↳ Examples: DATABASE_URL, JWT_SECRET, SMTP_HOST, EXTERNAL_API_KEY
 
@@ -61,9 +61,9 @@ def get_config() -> Settings:
     return _config
 ```
 
-Commit `.env.example` with placeholder values; gitignore `.env`:
+Commit `backend/.env.example` with placeholder values; gitignore `backend/.env`:
 
-**`.env.example`**
+**`backend/.env.example`**
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:password@localhost/appdb
 JWT_SECRET=replace-with-64-char-random-string
@@ -72,7 +72,7 @@ SMTP_PORT=587
 SENDGRID_API_KEY=SG.replace-me
 ```
 
-**`.env`** — never committed, listed in `.gitignore`.
+**`backend/.env`** — never committed, listed in `.gitignore`.
 
 ## Layer 2 — Runtime Config (Database)
 
@@ -233,9 +233,9 @@ Protect the route with middleware — only `admin` role can reach `/admin/**`.
 
 | The value is… | Layer | Storage |
 |---|---|---|
-| A secret (key, password, token) | 1 | `.env` / env var, no default |
-| A service URL or port | 1 | `.env` / env var, no default |
-| A build-time or deploy-time flag | 1 | `.env` / env var |
+| A secret (key, password, token) | 1 | `backend/.env` / env var, no default |
+| A service URL or port | 1 | `backend/.env` / env var, no default |
+| A build-time or deploy-time flag | 1 | `backend/.env` / env var |
 | A user-adjustable limit (upload size) | 2 | `app_config` table |
 | A user-adjustable preference (language) | 2 | `app_config` table |
 | A **business** feature flag (enable premium tier, kill switch, beta access) | 2 | `app_config` table |
@@ -272,7 +272,7 @@ UPDATE app_config SET value = '20' WHERE key = 'max_upload_mb';
 
 - [ ] No literal string or number that belongs to config appears anywhere in `src/`
 - [ ] Every secret and service URL is in `BaseSettings` with no default
-- [ ] `.env` is gitignored; `.env.example` is committed with placeholders
+- [ ] `backend/.env` is gitignored; `backend/.env.example` is committed with placeholders
 - [ ] Every user-adjustable value is a row in `app_config`, not an env var
 - [ ] `C.*` constants cover all known `app_config` keys — no magic strings at call sites
 - [ ] An admin settings page exists and covers every Layer 2 key

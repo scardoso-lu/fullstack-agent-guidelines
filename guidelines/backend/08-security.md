@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     )
 ```
 
-`.env` is in `.gitignore`. Commit `.env.example` with placeholder values so teammates know what's needed:
+`backend/.env` is in `.gitignore`. Commit `backend/.env.example` with placeholder values so teammates know what's needed:
 
-**`.env.example`**
+**`backend/.env.example`**
 ```bash
 AZURE_AD_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 AZURE_AD_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx   # fastapi-api app registration
@@ -185,7 +185,7 @@ class Settings(BaseSettings):
 
 ## Quick Checklist
 
-- [ ] `.env` is in `.gitignore`; `.env.example` exists with placeholder values
+- [ ] `backend/.env` is in `.gitignore`; `backend/.env.example` exists with placeholder values
 - [ ] `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, and `DATABASE_URL` use `Field(...)` with no default — startup crashes if unset
 - [ ] `get_current_user` validates against JWKS — not a shared secret; `aud` and `iss` are both checked
 - [ ] `@lru_cache` on the `PyJWKClient` — JWKS keys are not fetched on every request

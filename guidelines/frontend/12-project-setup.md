@@ -3,74 +3,101 @@ model: sonnet
 effort: extract
 ---
 
-# Node.js Project Setup — Docker + Next.js
+# Node.js Project Setup - Docker + Next.js + pnpm
 
-Use when creating the frontend Dockerfile, configuring npm to block postinstall scripts, or adding new npm packages. Covers Node.js 22 alpine, `.npmrc` with `ignore-scripts`, multi-stage Next.js build with standalone output, and non-root user.
-
----
-
-## Why Block Postinstall Scripts
-
-npm packages can declare `postinstall`, `preinstall`, and `install` lifecycle hooks that execute arbitrary shell commands during `npm install` or `npm ci`. Compromised or typosquatted packages use these to exfiltrate environment variables, download payloads, or install backdoors. `ignore-scripts=true` disables all lifecycle hooks at install time — no exceptions by default.
+Use when creating the frontend Dockerfile, initializing a Next.js frontend, configuring pnpm supply-chain hardening, or adding npm packages. Covers Node.js 22 alpine, pnpm via Corepack, frontend-local lock/workspace files, `.npmrc`, standalone Next.js output, and non-root production images.
 
 ---
 
-## .npmrc
+## Directory Boundary
 
-**`.npmrc — committed to git; applies on every npm install and npm ci`**
-```ini
-ignore-scripts=true   # block all lifecycle hook execution
-save-exact=true       # pin versions — no ^ or ~ on npm install <pkg>
-engine-strict=true    # fail if node version doesn't match engines field
+The frontend is its own package-manager boundary. All frontend package metadata lives under `frontend/`:
+
+```text
+frontend/
+  Dockerfile
+  Dockerfile.test
+  .npmrc
+  package.json
+  pnpm-lock.yaml
+  pnpm-workspace.yaml
+  .env
+  .env.example
+  next.config.ts
+  src/
 ```
 
-Commit `.npmrc`. It applies on developer machines and inside Docker builds alike.
+Do not create `pnpm-lock.yaml` or `pnpm-workspace.yaml` at the repository root for a single frontend app. Docker builds use `context: ./frontend`, so the lockfile and workspace file must be inside that context. A root lockfile will not match `frontend/package.json` inside the container and `pnpm install --frozen-lockfile` will fail with an outdated lockfile error.
 
-> **Native module exception**: packages that compile C++ bindings (`sharp`, `bcrypt`, `canvas`) need their postinstall script. After `npm ci --ignore-scripts`, rebuild only the specific package: `npm rebuild sharp`. Note this explicitly in a `ponytail:` comment.
+If the project is a real monorepo with multiple pnpm packages, make the Docker build context the repo root and copy the workspace files deliberately. Do not mix a root pnpm workspace with `context: ./frontend`.
 
 ---
 
-## Dockerfile (multi-stage)
+## pnpm Setup
+
+Use Corepack to activate the pinned pnpm version in Docker. Pin the same major version in CI and local setup.
+
+```bash
+cd frontend
+corepack enable
+corepack prepare pnpm@9.15.4 --activate
+pnpm install --frozen-lockfile
+```
+
+`frontend/.npmrc` is committed and applies to local installs and Docker builds:
+
+```ini
+ignore-scripts=true
+save-exact=true
+engine-strict=true
+```
+
+`ignore-scripts=true` blocks package lifecycle scripts during install. Native-module exceptions must be explicit and narrow: install with scripts disabled, then rebuild only the named package, with a `ponytail:` comment explaining why.
+
+---
+
+## Dockerfile
+
+`frontend/Dockerfile` is built with `context: ./frontend`, so every copied dependency file is relative to `frontend/`.
 
 ```dockerfile
 # syntax=docker/dockerfile:1.7
 
-# ── Stage 1: install deps ────────────────────────────────────────────────────
 FROM node:22-alpine AS deps
 WORKDIR /app
-# .npmrc must be present before npm ci so ignore-scripts applies inside Docker
-COPY package.json package-lock.json .npmrc ./
-RUN npm ci --ignore-scripts
 
-# ── Stage 2: build ───────────────────────────────────────────────────────────
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
 FROM node:22-alpine AS builder
 WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN pnpm build
 
-# ── Stage 3: production runtime (Next.js standalone output) ─────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Non-root user
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser  --system --uid 1001 nextjs
+    adduser --system --uid 1001 nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public           ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
 EXPOSE 3000
 CMD ["node", "server.js"]
 ```
 
-**Standalone output requires this in `next.config.ts`:**
+Standalone output requires this in `next.config.ts`:
 
 ```ts
-// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -81,52 +108,32 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-The standalone build copies only the files needed to run `node server.js` — no dev dependencies, no source maps, minimal attack surface.
-
 ---
 
-## npm ci vs npm install
+## package.json
 
-```bash
-# ✅ Always use npm ci in Docker and CI — installs exactly from package-lock.json
-RUN npm ci --ignore-scripts
-
-# ❌ npm install resolves versions at build time — not reproducible
-RUN npm install
-```
-
----
-
-## TypeScript Tooling via npx
-
-Run TypeScript tools through `npx` or `package.json` scripts — never install them globally:
-
-```bash
-# Type-check without emitting output
-npx tsc --noEmit
-
-# Run the dev server
-npx next dev
-
-# Linting
-npx eslint src/
-
-# Unit tests
-npx vitest run
-npx jest --passWithNoTests
-```
-
-In `package.json`, wire these as scripts so Dockerfile `CMD` and CI both use the same entry points:
+Use exact versions. No `^`, `~`, `latest`, prerelease, VCS URL, direct URL, or `file:` dependency unless a documented exception has been approved.
 
 ```json
 {
   "scripts": {
-    "dev":        "next dev",
-    "build":      "next build",
-    "start":      "next start",
-    "lint":       "next lint",
-    "typecheck":  "tsc --noEmit",
-    "test":       "vitest run"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "15.3.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "vitest": "3.2.4"
   }
 }
 ```
@@ -136,24 +143,27 @@ In `package.json`, wire these as scripts so Dockerfile `CMD` and CI both use the
 ## Lockfile Rules
 
 ```bash
-# ✅ Commit package-lock.json — it contains SHA hashes of every dependency
-git add package-lock.json
-
-# ❌ Never delete or gitignore it
-# package-lock.json   ← never add this to .gitignore
+cd frontend
+pnpm install --frozen-lockfile
+cd ..
+git add frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc
 ```
+
+Never generate the frontend pnpm lockfile from the repository root unless the project is intentionally configured as a root pnpm monorepo and Docker also builds from the root context.
 
 ---
 
 ## Environment Variables
 
-**`.env.frontend — real secrets; gitignored`**
+**`frontend/.env` - real secrets; gitignored**
+
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXTAUTH_SECRET=...
 ```
 
-**`.env.frontend.example — committed template; no real values`**
+**`frontend/.env.example` - committed template; no real values**
+
 ```bash
 NEXT_PUBLIC_API_URL=http://backend:8000
 NEXTAUTH_SECRET=<generate: openssl rand -hex 32>
@@ -166,40 +176,44 @@ NEXTAUTH_SECRET=<generate: openssl rand -hex 32>
 ## Anti-Patterns
 
 ```dockerfile
-# ❌ WRONG — .npmrc not copied; ignore-scripts doesn't apply inside Docker
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+# WRONG - Docker context is ./frontend but lockfile was generated at repo root
+# A root pnpm lockfile/workspace file for a single frontend app is wrong.
+COPY .npmrc package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
-# ✅ CORRECT — .npmrc copied first
-COPY package.json package-lock.json .npmrc ./
-RUN npm ci --ignore-scripts
+# CORRECT - lockfile and workspace file live inside frontend/
+# frontend/pnpm-lock.yaml
+# frontend/pnpm-workspace.yaml
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
-# ❌ WRONG — single-stage; ships node_modules, dev deps, and source into production image
-FROM node:22-alpine
-COPY . .
-RUN npm ci && npm run build
-CMD ["npm", "start"]
+# WRONG - package manager mismatch; do not generate an npm lockfile for the pnpm frontend
 
-# ❌ WRONG — semver range in package.json; different versions on each install
+# WRONG - semver range in package.json; different versions can install later
 "next": "^15.0.0"
 
-# ✅ CORRECT — exact version; same on every npm ci
-"next": "15.3.3"
+# CORRECT - exact version
+"next": "15.3.4"
 
-# ❌ WRONG — running as root (no USER instruction)
-CMD ["node", "server.js"]
+# WRONG - single-stage production image ships source and dev deps
+FROM node:22-alpine
+COPY . .
+RUN pnpm install --frozen-lockfile && pnpm build
+CMD ["pnpm", "start"]
 ```
 
 ---
 
 ## Quick Checklist
 
-- [ ] `.npmrc` has `ignore-scripts=true` and `save-exact=true` — committed to git
-- [ ] Dockerfile copies `.npmrc` before `npm ci --ignore-scripts`
-- [ ] Multi-stage build: deps → builder → runner (no dev files in production image)
+- [ ] `frontend/package.json` exists and uses exact dependency versions
+- [ ] `frontend/pnpm-lock.yaml` is committed and matches `frontend/package.json`
+- [ ] `frontend/pnpm-workspace.yaml` is committed when pnpm workspace tooling is used
+- [ ] No frontend `pnpm-lock.yaml` or `pnpm-workspace.yaml` is generated at repo root for a single frontend app
+- [ ] `frontend/.npmrc` has `ignore-scripts=true`, `save-exact=true`, and `engine-strict=true`
+- [ ] `frontend/Dockerfile` copies `.npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml` before `pnpm install --frozen-lockfile`
+- [ ] Docker compose uses `build.context: ./frontend` for the frontend service
+- [ ] `frontend/.env` is gitignored and `frontend/.env.example` is committed
 - [ ] `next.config.ts` has `output: "standalone"` and `productionBrowserSourceMaps: false`
-- [ ] Non-root user set before `CMD`
-- [ ] `package-lock.json` committed — never in `.gitignore`
-- [ ] `NEXT_PUBLIC_` only on values intentionally visible to users
-- [ ] `.env.frontend` gitignored; `.env.frontend.example` committed with placeholder values
-- [ ] Native module exceptions documented with `ponytail:` comment
+- [ ] Non-root user is set before production `CMD`
+- [ ] `NEXT_PUBLIC_` is used only for values intentionally visible to users

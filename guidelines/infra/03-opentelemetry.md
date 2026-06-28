@@ -209,7 +209,7 @@ Keep span names stable and low-cardinality. Never include IDs or user data in sp
 
 ### Environment Variables
 
-**`.env.backend`**
+**`backend/.env`**
 ```bash
 OTEL_SERVICE_NAME=my-backend
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
@@ -225,12 +225,13 @@ Next.js 15 has stable built-in OpenTelemetry support via `instrumentation.ts`. N
 ### Install
 
 ```bash
-npm install \
-  @opentelemetry/sdk-node \
-  @opentelemetry/auto-instrumentations-node \
-  @opentelemetry/exporter-trace-otlp-http \
-  @opentelemetry/exporter-metrics-otlp-http \
-  @opentelemetry/sdk-metrics
+cd frontend
+pnpm add \
+  @opentelemetry/sdk-node@0.57.2 \
+  @opentelemetry/auto-instrumentations-node@0.56.1 \
+  @opentelemetry/exporter-trace-otlp-http@0.57.2 \
+  @opentelemetry/exporter-metrics-otlp-http@0.57.2 \
+  @opentelemetry/sdk-metrics@1.30.1
 ```
 
 ### `instrumentation.ts`
@@ -307,7 +308,7 @@ export default async function ProductsPage() {
 
 ### Environment Variables
 
-**`.env.frontend`**
+**`frontend/.env`**
 ```bash
 OTEL_SERVICE_NAME=my-frontend
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318   # HTTP port for Next.js
@@ -398,6 +399,6 @@ with tracer.start_as_current_span("operation") as span:
 - [ ] Backend: custom spans only at use case boundaries — not inside repositories
 - [ ] Frontend: `instrumentation.ts` at project root (not `src/`); guarded by `NEXT_RUNTIME === "nodejs"`
 - [ ] Frontend API client injects W3C `traceparent` header via `propagation.inject()`
-- [ ] `OTEL_SERVICE_NAME` set in both `.env.backend` and `.env.frontend`
+- [ ] `OTEL_SERVICE_NAME` set in both `backend/.env` and `frontend/.env`
 - [ ] Span attributes contain IDs and roles only — never PII, passwords, or tokens
 - [ ] No vendor SDK imported directly in application code — OTel API only

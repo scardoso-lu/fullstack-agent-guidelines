@@ -45,6 +45,10 @@ def _read(source: Optional[Path]) -> str:
     return source.read_text()
 
 
+def _read_if_exists(path: Path) -> str | None:
+    return path.read_text() if path.exists() and path.is_file() else None
+
+
 def _emit(report, strict: bool) -> None:
     output_report(report, strict, force_human=state.human, pretty=state.pretty)
 
@@ -276,6 +280,53 @@ def cmd_supply_chain(
 # ── sensitive-logging ─────────────────────────────────────────────────────────
 
 
+@app.command(name="project-layout")
+def cmd_project_layout(
+    root: Annotated[Path, typer.Argument(help="Project root to inspect (default: current directory)")] = Path("."),
+    strict: _STRICT = False,
+) -> None:
+    """Validate stack-local artifacts plus Docker, compose, Makefile, and CI wiring."""
+    from validate_cli._validators.project_layout import validate_project_layout
+
+    if not root.exists() or not root.is_dir():
+        print_error(f"{root} is not a directory.", force_human=state.human)
+        raise typer.Exit(1)
+
+    paths = sorted(
+        str(path.relative_to(root)).replace("\\", "/")
+        for path in root.rglob("*")
+        if path.is_file()
+        and ".git" not in path.relative_to(root).parts
+        and "node_modules" not in path.relative_to(root).parts
+        and ".venv" not in path.relative_to(root).parts
+    )
+
+    wanted = [
+        "backend/Dockerfile",
+        "backend/Dockerfile.test",
+        "frontend/Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.test.yml",
+        "Makefile",
+    ]
+    files: dict[str, str] = {}
+    for rel in wanted:
+        content = _read_if_exists(root / rel)
+        if content is not None:
+            files[rel] = content
+
+    workflow_dir = root / ".github" / "workflows"
+    if workflow_dir.exists():
+        for path in list(workflow_dir.glob("*.yml")) + list(workflow_dir.glob("*.yaml")):
+            files[str(path.relative_to(root)).replace("\\", "/")] = path.read_text()
+
+    try:
+        _emit(validate_project_layout("\n".join(paths), files), strict)
+    except ValueError as exc:
+        print_error(str(exc), "validate_project_layout", state.human)
+        raise typer.Exit(1)
+
+
 @app.command(name="sensitive-logging")
 def cmd_sensitive_logging(
     files: Annotated[List[Path], typer.Argument(help="Python source file(s) to check")],
@@ -345,6 +396,10 @@ def cmd_run(
       "migration": "<migration file content>",
       "coverage": "<coverage.xml content>",
       "supply_chain": "<pyproject.toml or package.json content>",
+      "project_layout": {
+        "file_tree": "backend/Dockerfile\nfrontend/package.json\n...",
+        "files": {"docker-compose.yml": "...", "backend/Dockerfile": "..."}
+      },
       "env": { "settings_source": "...", "env_example": "..." },
       "tests":             [{ "filename": "test_foo.py", "source": "..." }],
       "logs":              [{ "filename": "foo.py",      "source": "..." }],
@@ -392,6 +447,7 @@ def cmd_run(
     from validate_cli._validators.migration import validate_migration
     from validate_cli._validators.coverage import validate_coverage_distribution
     from validate_cli._validators.supply_chain import validate_supply_chain
+    from validate_cli._validators.project_layout import validate_project_layout
 
     if "imports" in config:
         _run_single("imports", validate_import_directions, config["imports"])
@@ -403,6 +459,17 @@ def cmd_run(
         _run_single("coverage", validate_coverage_distribution, config["coverage"])
     if "supply_chain" in config:
         _run_single("supply_chain", validate_supply_chain, config["supply_chain"])
+    if "project_layout" in config:
+        layout = config["project_layout"]
+        if isinstance(layout, str):
+            _run_single("project_layout", validate_project_layout, layout, {})
+        else:
+            _run_single(
+                "project_layout",
+                validate_project_layout,
+                layout.get("file_tree", ""),
+                layout.get("files", {}),
+            )
 
     # ── env ───────────────────────────────────────────────────────────────────
     from validate_cli._validators.env import validate_env_completeness

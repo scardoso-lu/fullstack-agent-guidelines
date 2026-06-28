@@ -3,108 +3,78 @@ model: sonnet
 effort: high
 ---
 
-# Testing in Docker — Running Tests from Outside the Container
+# Testing in Docker - Running Tests from Outside the Container
 
-Use when an agent needs to run the test suite, check CI status locally, or read test output. Covers the Dockerfile `test` stage, `docker-compose.test.yml`, the agent-facing shell commands, and the `test-results/` volume pattern for structured output.
+Use when an agent needs to run the test suite, check CI status locally, or read test output. Covers dedicated test Dockerfiles, `docker-compose.test.yml`, agent-facing shell commands, and stack-local `backend/test-results/` and `frontend/test-results/` output.
 
-Tests always execute **inside** the container (reproducible environment, correct Python/Node version, correct deps). Agents trigger them from **outside** using `docker compose run --rm` and read results from stdout or the mounted `test-results/` directory.
+Tests execute inside containers for reproducible Python/Node versions and dependency sets. Agents trigger them from outside using `docker compose run --rm` and read results from stdout or mounted stack-local result files.
 
 ---
 
-## Dockerfile — Add a `test` Stage
+## Dockerfiles
 
-The production image uses `--no-dev`. The test stage inherits from the same base and adds dev dependencies. No duplication.
+Production and test images are separate files. The production Dockerfile uses production dependencies only. Test Dockerfiles install dev dependencies and copy tests. Do not add a test stage to the production Dockerfile.
 
-### Backend (`backend/Dockerfile`)
+### Backend Production: `backend/Dockerfile`
 
 ```dockerfile
 # syntax=docker/dockerfile:1.7
 
-FROM python:3.13-slim AS base
+FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /usr/local/bin/
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
-# ── production ────────────────────────────────────────────────────────────────
-FROM base AS production
 RUN uv sync --frozen --no-dev
+
 COPY src/ ./src/
 RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 EXPOSE 8000
 CMD ["uv", "run", "python", "-m", "src.main"]
-
-# ── test ──────────────────────────────────────────────────────────────────────
-FROM base AS test
-RUN uv sync --frozen          # includes dev deps (pytest, pytest-asyncio, ruff…)
-COPY src/ ./src/
-COPY test/ ./test/
-# Default command — overridable in docker-compose.test.yml
-CMD ["uv", "run", "pytest", "test/", "--tb=short", "-v"]
 ```
 
-### Frontend (`frontend/Dockerfile`)
+### Backend Tests: `backend/Dockerfile.test`
 
 ```dockerfile
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-alpine AS deps
+FROM python:3.13-slim
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /usr/local/bin/
 WORKDIR /app
-COPY package.json package-lock.json .npmrc ./
-RUN npm ci --ignore-scripts
+COPY pyproject.toml uv.lock ./
 
-FROM node:22-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
+RUN uv sync --frozen
 
-FROM node:22-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public           ./public
-USER nextjs
-EXPOSE 3000
-CMD ["node", "server.js"]
+COPY src/ ./src/
+COPY test/ ./test/
 
-# ── test ──────────────────────────────────────────────────────────────────────
-FROM deps AS test
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-CMD ["npm", "run", "test:ci"]
+CMD ["uv", "run", "pytest", "test/", "--tb=short", "-v"]
 ```
 
-Add the test script to `package.json`:
+### Frontend Tests
 
-```json
-{
-  "scripts": {
-    "test":    "vitest",
-    "test:ci": "vitest run --reporter=verbose --reporter=junit --outputFile=test-results/results.xml"
-  }
-}
-```
+Use the same split when frontend production and test needs diverge:
+
+- `frontend/Dockerfile` builds the production runner image.
+- `frontend/Dockerfile.test` installs test tooling and runs unit/component tests.
+
+If a project deliberately keeps a frontend multi-stage Dockerfile, that exception must be documented in the repo. The backend rule is stricter: backend production and test Dockerfiles are always separate.
 
 ---
 
 ## docker-compose.test.yml
 
-**`docker-compose.test.yml`**
 ```yaml
 services:
   backend-test:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-      target: test
+      dockerfile: Dockerfile.test
     env_file:
-      - .env.backend.test
+      - ./backend/.env.test
     volumes:
-      - ./test-results/backend:/app/test-results
+      - ./backend/test-results:/app/test-results
     command: >
       uv run pytest test/
         --tb=short
@@ -117,12 +87,11 @@ services:
   frontend-test:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-      target: test
+      dockerfile: Dockerfile.test
     env_file:
-      - .env.frontend.test
+      - ./frontend/.env.test
     volumes:
-      - ./test-results/frontend:/app/test-results
+      - ./frontend/test-results:/app/test-results
     command: npm run test:ci
 ```
 
@@ -130,25 +99,17 @@ services:
 
 ## Agent Commands
 
-Agents run these from outside the container. `--rm` removes the container after exit. The exit code is the test result: `0` = pass, non-zero = failure.
+Agents run these from outside the container. `--rm` removes the container after exit. The exit code is the test result: `0` means pass, non-zero means failure.
 
 ```bash
-# Run backend tests — output to stdout + test-results/backend/
+# Run backend tests
 docker compose -f docker-compose.test.yml run --rm backend-test
 
-# Run frontend tests — output to stdout + test-results/frontend/
+# Run frontend tests
 docker compose -f docker-compose.test.yml run --rm frontend-test
 
-# Run both stacks
-docker compose -f docker-compose.test.yml run --rm backend-test && \
-docker compose -f docker-compose.test.yml run --rm frontend-test
-
-# Capture exit code explicitly (for CI or conditional logic)
-docker compose -f docker-compose.test.yml run --rm backend-test
-BACKEND_EXIT=$?
-
-# Re-build before running (required after source or dep changes)
-docker compose -f docker-compose.test.yml build backend-test && \
+# Rebuild before running after Dockerfile or dependency changes
+docker compose -f docker-compose.test.yml build backend-test
 docker compose -f docker-compose.test.yml run --rm backend-test
 ```
 
@@ -156,106 +117,100 @@ docker compose -f docker-compose.test.yml run --rm backend-test
 
 ## Reading Test Output
 
-Output goes to two places simultaneously:
+Output goes to two places:
 
-### 1. stdout (immediate, always available)
-
-The agent reads stdout directly from the `docker compose run` command above. This is the fastest path — no file reading needed.
-
-### 2. `test-results/` volume (structured, parseable)
+1. stdout, which the agent reads directly from `docker compose run`.
+2. Stack-local `test-results/`, mounted from the host for structured JUnit and coverage reports.
 
 ```
-test-results/
-├── backend/
-│   ├── results.xml     ← JUnit XML — one <testcase> per test
-│   └── coverage.xml    ← Cobertura coverage report
-└── frontend/
-    └── results.xml     ← JUnit XML from vitest --reporter=junit
+backend/
+  test-results/
+    results.xml
+    coverage.xml
+frontend/
+  test-results/
+    results.xml
 ```
 
 After the run, agents read these files directly on the host:
 
 ```bash
-# Full JUnit XML
-cat test-results/backend/results.xml
-
-# Quick failure summary (failures only)
-grep -A3 'failure\|error' test-results/backend/results.xml
-
-# Coverage summary
-grep -E 'line-rate|branch-rate' test-results/backend/coverage.xml
+cat backend/test-results/results.xml
+grep -A3 'failure\|error' backend/test-results/results.xml
+grep -E 'line-rate|branch-rate' backend/test-results/coverage.xml
 ```
 
-Add `test-results/` to `.gitignore`:
-
-```bash
-# .gitignore
-test-results/
-```
+Add `backend/test-results/` and `frontend/test-results/` to `.gitignore`.
 
 ---
 
 ## Test Environment Variables
 
-**`.env.backend.test — gitignored; overrides for the test environment`**
+**`backend/.env.test` - gitignored; overrides for the backend test environment**
+
 ```bash
 ENVIRONMENT=TEST
 DATABASE_URL=sqlite+aiosqlite:///./test.db
 JWT_SECRET=test-secret-not-for-production
 ```
 
-**`.env.backend.test.example — committed template`**
+**`backend/.env.test.example` - committed template**
+
 ```bash
 ENVIRONMENT=TEST
 DATABASE_URL=sqlite+aiosqlite:///./test.db
 JWT_SECRET=test-secret-not-for-production
 ```
 
-The test env file is separate from `.env.backend` — the test container must never connect to a real database.
+The test env file is separate from `backend/.env`; the test container must never connect to a real database.
 
 ---
 
 ## Anti-Patterns
 
 ```bash
-# ❌ WRONG — running tests on the host; different Python/Node version, wrong deps
+# WRONG - running tests on the host; version and deps can drift
 cd backend && uv run pytest
 
-# ❌ WRONG — running tests in the production stage; dev deps not installed
+# WRONG - running tests in the production service
 docker compose exec backend uv run pytest
-
-# ❌ WRONG — running tests in the production stage via run
 docker compose run --rm backend uv run pytest
 
-# ✅ CORRECT — dedicated test stage with dev deps
+# WRONG - backend test stage inside backend/Dockerfile
+docker build --target test ./backend
+
+# CORRECT - dedicated backend test Dockerfile
 docker compose -f docker-compose.test.yml run --rm backend-test
+```
 
-# ❌ WRONG — not capturing exit code; CI passes even when tests fail
-docker compose -f docker-compose.test.yml run --rm backend-test
-# (no exit code check)
+```yaml
+# WRONG - test service targets a stage inside the production Dockerfile
+services:
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      # Do not target a test stage in the production Dockerfile.
 
-# ✅ CORRECT — let the exit code propagate naturally
-docker compose -f docker-compose.test.yml run --rm backend-test
-echo "Tests exited with: $?"
-
-# ❌ WRONG — no test-results volume; agent must exec into container to read output
-# (no volumes: in docker-compose.test.yml)
-
-# ✅ CORRECT — mount test-results so host can read structured output without exec
-volumes:
-  - ./test-results/backend:/app/test-results
+# CORRECT - test service uses the separate test Dockerfile
+services:
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
 ```
 
 ---
 
 ## Quick Checklist
 
-- [ ] Backend `Dockerfile` has a `test` stage that runs `uv sync --frozen` (with dev deps)
-- [ ] Frontend `Dockerfile` has a `test` stage built from the `deps` stage
-- [ ] `docker-compose.test.yml` defines `backend-test` and `frontend-test` services with `target: test`
-- [ ] Both test services mount `./test-results/<stack>:/app/test-results`
+- [ ] Backend `Dockerfile` is production-only and has no `test` stage
+- [ ] Backend `Dockerfile.test` runs `uv sync --frozen` with dev deps
+- [ ] Backend test image copies `test/`; production image does not
+- [ ] `docker-compose.test.yml` defines `backend-test` with `dockerfile: Dockerfile.test`
+- [ ] `docker-compose.test.yml` mounts `./backend/test-results:/app/test-results`
 - [ ] pytest writes `--junitxml=/app/test-results/results.xml` and `--cov-report=xml`
-- [ ] vitest writes `--reporter=junit --outputFile=test-results/results.xml`
-- [ ] `.env.backend.test` and `.env.frontend.test` exist; test DB is not the production DB
-- [ ] `test-results/` is in `.gitignore`
-- [ ] Agent always uses `docker compose -f docker-compose.test.yml run --rm <service>` — never `exec` into production container
+- [ ] Frontend test image strategy is explicit; prefer `frontend/Dockerfile.test` when test deps differ from production
+- [ ] `backend/.env.test` and `frontend/.env.test` exist and do not point at production systems
+- [ ] `backend/test-results/` and `frontend/test-results/` are in `.gitignore`
+- [ ] Agents use `docker compose -f docker-compose.test.yml run --rm <service>` and never exec into the production container for tests
