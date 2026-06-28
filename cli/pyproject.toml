@@ -1,6 +1,6 @@
 [project]
 name = "validate-tools"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local CLI for fullstack code validation — import directions, migrations, secrets, and more"
 readme = "README.md"
 license = { text = "MIT" }
